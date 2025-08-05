@@ -1,0 +1,99 @@
+/*
+  This API route handles sending messages using the MIAW (Messaging for In-App and Web) API.
+  It includes typing indicators and message acknowledgments.
+  Uses centralized authentication from MiawApiClient.
+*/
+
+import { NextRequest, NextResponse } from "next/server";
+import { MiawApiClient } from "@/app/lib/miawApiService";
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { msg, typingIndicator } = body;
+
+  // Validate message length (2000 character limit)
+  if (msg && msg.length > 2000) {
+    return NextResponse.json(
+      { message: "error", error: "Message too long" },
+      { status: 400 }
+    );
+  }
+
+  // Retrieve the MIAW chat session from cookies
+  const chatSession = req.cookies.get("miawChatSession")?.value;
+  
+  if (!chatSession) {
+    return NextResponse.json(
+      { message: "Invalid Session. Start a new session." },
+      { status: 400 }
+    );
+  }
+
+  let sessionData;
+  try {
+    sessionData = JSON.parse(chatSession);
+  } catch (error) {
+    return NextResponse.json(
+      { message: "Invalid session data. Start a new session." },
+      { status: 400 }
+    );
+  }
+
+  const { conversationId, continuationToken } = sessionData;
+
+  if (!conversationId) {
+    return NextResponse.json(
+      { message: "Invalid session data. Start a new session." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Initialize MIAW API client (handles token management internally)
+    const miawClient = new MiawApiClient();
+
+    // Set continuation token if available for session-based operations
+    if (continuationToken) {
+      miawClient.setContinuationToken(continuationToken);
+    }
+
+    // Handle typing indicator if requested
+    if (typingIndicator !== undefined) {
+      await miawClient.sendTypingIndicator(conversationId, typingIndicator);
+
+      // If only typing indicator, return success
+      if (!msg) {
+        return NextResponse.json({ message: "success", data: [] }, { status: 200 });
+      }
+    }
+
+    // Send the actual message
+    if (msg) {
+      const messageData = await miawClient.sendMessage(conversationId, msg);
+
+      // Format response to match existing interface
+      const formattedResponse = {
+        message: "success",
+        data: [
+          {
+            id: messageData.id || `msg-${Date.now()}`,
+            message: messageData.text || msg,
+            type: "user",
+            timestamp: new Date().toISOString()
+          }
+        ]
+      };
+
+      return NextResponse.json(formattedResponse, { status: 200 });
+    }
+
+    return NextResponse.json({ message: "success", data: [] }, { status: 200 });
+
+  } catch (error) {
+    console.error("Error in MIAW message API:", error);
+    return NextResponse.json(
+      { message: "Failed to send message", error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}

@@ -1,0 +1,251 @@
+{
+  "extraction_summary": {
+    "date": "2025-01-04",
+    "total_sources": 3,
+    "sources_crawled": [
+      "https://developer.salesforce.com/docs/service/messaging-api/references/miaw-api-reference?meta=Summary",
+      "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app",
+      "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/wiki/Current-App-Support"
+    ]
+  },
+  "salesforce_messaging_api": {
+    "official_documentation": {
+      "title": "Messaging for In-App and Web API Endpoints",
+      "version": "2.0.0",
+      "description": "Public REST API for Messaging for In-App and Web",
+      "base_url": "https://{scrt-url}",
+      "total_endpoints": 17,
+      "endpoints": [
+        {
+          "name": "Generate access token for authenticated user",
+          "method": "POST",
+          "category": "Authentication"
+        },
+        {
+          "name": "Generate access token for unauthenticated user", 
+          "method": "POST",
+          "category": "Authentication"
+        },
+        {
+          "name": "Revoke token",
+          "method": "DELETE",
+          "category": "Authentication"
+        },
+        {
+          "name": "Generate continuation token",
+          "method": "GET",
+          "category": "Session Management"
+        },
+        {
+          "name": "Create conversation",
+          "method": "POST",
+          "category": "Conversation Management"
+        },
+        {
+          "name": "Close conversation",
+          "method": "DELETE", 
+          "category": "Conversation Management"
+        },
+        {
+          "name": "List conversations",
+          "method": "GET",
+          "category": "Conversation Management"
+        },
+        {
+          "name": "List conversation entries",
+          "method": "GET",
+          "category": "Conversation Management"
+        },
+        {
+          "name": "Retrieve conversation transcript",
+          "method": "GET",
+          "category": "Conversation Management"
+        },
+        {
+          "name": "Retrieve conversation routing status",
+          "method": "GET",
+          "category": "Conversation Management"
+        },
+        {
+          "name": "Send message",
+          "method": "POST",
+          "category": "Messaging"
+        },
+        {
+          "name": "Send file",
+          "method": "POST",
+          "category": "Messaging"
+        },
+        {
+          "name": "Send delivery acknowledgements or read receipts",
+          "method": "POST",
+          "category": "Messaging"
+        },
+        {
+          "name": "Add typing indicator to a conversation",
+          "method": "POST",
+          "category": "Messaging"
+        },
+        {
+          "name": "End messaging session",
+          "method": "DELETE",
+          "category": "Session Management"
+        },
+        {
+          "name": "Register device for push notifications",
+          "method": "POST",
+          "category": "Push Notifications"
+        },
+        {
+          "name": "Unregister device from push notifications",
+          "method": "DELETE",
+          "category": "Push Notifications"
+        }
+      ],
+      "navigation_sections": [
+        "Overview",
+        "Guides", 
+        "Reference"
+      ]
+    }
+  },
+  "sample_application": {
+    "repository_info": {
+      "name": "messaging-web-api-sample-app",
+      "owner": "Salesforce-Async-Messaging",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app",
+      "description": "A sample app created using React JS library to demonstrate Messaging for Web using SCRT2 Public (aka v2.0) REST APIs",
+      "stars": 24,
+      "forks": 12,
+      "watchers": 5,
+      "open_issues": 6,
+      "total_commits": 68,
+      "primary_language": "JavaScript (97.4%)",
+      "tech_stack": ["React JS", "JavaScript", "CSS", "HTML"],
+      "contributors": ["sachinhreddy-sfdc", "tiffanytso-sfdc"]
+    },
+    "implementation_details": {
+      "live_demo": "https://salesforce-async-messaging.github.io/messaging-web-api-sample-app/build/index.html",
+      "local_development": "http://localhost:3000",
+      "build_tool": "Create React App",
+      "installation_commands": [
+        "git clone https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app.git",
+        "cd messaging-web-api-sample-app",
+        "npm install",
+        "npm run build",
+        "npm start"
+      ],
+      "prerequisites": "Ensure you have an Embedded Service deployment for Messaging for In-App and Web created of type Custom Client"
+    },
+    "supported_features": {
+      "server_sent_events": [
+        "CONVERSATION_MESSAGE",
+        "CONVERSATION_PARTICIPANT_CHANGED",
+        "CONVERSATION_ROUTING_RESULT", 
+        "CONVERSATION_DELIVERY_ACKNOWLEDGEMENT",
+        "CONVERSATION_READ_ACKNOWLEDGEMENT",
+        "CONVERSATION_TYPING_STARTED_INDICATOR",
+        "CONVERSATION_TYPING_STOPPED_INDICATOR",
+        "CONVERSATION_CLOSE_CONVERSATION"
+      ],
+      "message_types": ["StaticContentMessage"],
+      "message_format_types": ["Text"],
+      "authentication": {
+        "status": "Limited",
+        "details": "Only unauthenticated conversations are currently supported. User Verification is not yet implemented."
+      },
+      "pre_chat": {
+        "status": "Partially Supported",
+        "features": [
+          "UI support for all form field types in Embedded Service Deployment",
+          "Support for 'Every Conversation' and 'Every Session' display frequency",
+          "Hidden Pre-Chat support not implemented"
+        ]
+      },
+      "session_continuity": {
+        "status": "Limited",
+        "features": [
+          "Session continuity for same browser tab only",
+          "Page reload continues open conversation",
+          "Read/Delivered acknowledgements not rendered after reload"
+        ]
+      }
+    }
+  },
+  "key_documentation_links": [
+    {
+      "title": "Main API Documentation",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api"
+    },
+    {
+      "title": "Getting Started Guide", 
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/guide/get-started.html"
+    },
+    {
+      "title": "API Reference",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/miaw-api-reference?meta=Summary"
+    },
+    {
+      "title": "Server-Sent Events Structure",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about/server-sent-events-structure.html"
+    },
+    {
+      "title": "Message Types and Format Types",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about/message-types-format-types.html"
+    },
+    {
+      "title": "Known Issues",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/guide/miaw-api-known-issues.html"
+    },
+    {
+      "title": "Sample App Wiki",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/wiki/Current-App-Support"
+    }
+  ],
+  "api_categories": {
+    "authentication": [
+      "Generate access token for authenticated user",
+      "Generate access token for unauthenticated user", 
+      "Revoke token"
+    ],
+    "session_management": [
+      "Generate continuation token",
+      "End messaging session"
+    ],
+    "conversation_management": [
+      "Create conversation",
+      "Close conversation",
+      "List conversations", 
+      "List conversation entries",
+      "Retrieve conversation transcript",
+      "Retrieve conversation routing status"
+    ],
+    "messaging": [
+      "Send message",
+      "Send file",
+      "Send delivery acknowledgements or read receipts",
+      "Add typing indicator to a conversation"
+    ],
+    "push_notifications": [
+      "Register device for push notifications",
+      "Unregister device from push notifications"
+    ]
+  },
+  "implementation_recommendations": {
+    "for_developers": [
+      "Use the sample React app as a starting point for implementation",
+      "Refer to the Wiki for current feature support and limitations",
+      "Test with unauthenticated conversations first",
+      "Implement session continuity for production use",
+      "Consider the API limitations when building features"
+    ],
+    "missing_features_to_implement": [
+      "User verification/authenticated conversations",
+      "Hidden Pre-Chat support",
+      "Cross-tab session continuity", 
+      "Read/Delivered acknowledgements persistence after reload",
+      "Additional message types beyond StaticContentMessage",
+      "Additional format types beyond Text"
+    ]
+  }
+}

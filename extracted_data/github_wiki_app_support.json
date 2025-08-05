@@ -1,0 +1,83 @@
+{
+  "source": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/wiki/Current-App-Support",
+  "title": "Current App Support - Wiki",
+  "description": "The following enums are currently supported features and/or functionalities in the latest version of the sample app.",
+  "last_updated": "Jul 16, 2024 on Jul 17, 2024",
+  "editor": "Sachin H Reddy",
+  "supported_features": {
+    "server_sent_events": [
+      "CONVERSATION_MESSAGE",
+      "CONVERSATION_PARTICIPANT_CHANGED", 
+      "CONVERSATION_ROUTING_RESULT",
+      "CONVERSATION_DELIVERY_ACKNOWLEDGEMENT",
+      "CONVERSATION_READ_ACKNOWLEDGEMENT", 
+      "CONVERSATION_TYPING_STARTED_INDICATOR",
+      "CONVERSATION_TYPING_STOPPED_INDICATOR",
+      "CONVERSATION_CLOSE_CONVERSATION"
+    ],
+    "message_types": [
+      "StaticContentMessage"
+    ],
+    "message_format_types": [
+      "Text"
+    ],
+    "user_verification": {
+      "status": "Not Implemented",
+      "description": "Only unauthenticated conversations are currently supported. User Verification is not yet implemented in the sample app."
+    },
+    "pre_chat": {
+      "status": "Partially Implemented",
+      "features": [
+        "Pre-Chat UI support is added for all the form field types supported in the Embedded Service Deployment.",
+        "Pre-Chat support is added to both display frequency configurations i.e. 'Every Conversation' or 'Every Session'.",
+        "Hidden Pre-Chat support is not implemented in the app."
+      ]
+    },
+    "session_continuity": {
+      "status": "Limited Implementation", 
+      "features": [
+        "App supports session continuity for Messaging Conversations in the same browser tab only, i.e. reloading a page in the same tab should continue an open conversation.",
+        "Read/Delivered acknowledgements are not rendered after reload in the sample app."
+      ]
+    }
+  },
+  "documentation_links": [
+    {
+      "title": "Server-Sent Events Structure", 
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about/server-sent-events-structure.html",
+      "description": "More info on server-sent event types"
+    },
+    {
+      "title": "Message Types",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about/message-types-format-types.html#message-types", 
+      "description": "More info on message types"
+    },
+    {
+      "title": "Message Format Types",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about/message-types-format-types.html#format-types",
+      "description": "More info on format types"
+    },
+    {
+      "title": "Messaging for In-App and Web API Documentation",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api",
+      "description": "Main API documentation"
+    },
+    {
+      "title": "Getting Started Guide",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/guide/get-started.html",
+      "description": "Getting started with the API"
+    },
+    {
+      "title": "REST API Reference",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/miaw-api-reference?meta=Summary",
+      "description": "Complete REST API reference"
+    },
+    {
+      "title": "Known Issues",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/guide/miaw-api-known-issues.html",
+      "description": "Known issues and limitations"
+    }
+  ],
+  "wiki_clone_url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app.wiki.git",
+  "extraction_timestamp": "2025-01-04"
+}

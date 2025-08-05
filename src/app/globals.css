@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Adecco Primary Colors */
+  --adecco-red: #EE2E24;
+  --adecco-white: #FFFFFF;
+  --adecco-black: #000000;
+  --adecco-gray: #1c304b;
+  
+  /* Adecco Creative Complementary Colors */
+  --dusk-orange: #FF4A40;
+  --heavy-red: #A1140C;
+  --ken-masters-red: #EE2E24;
+  --poetic-green: #00A13D;
+  --synthetic-spearmint: #24EE71;
+  
+  /* Neutral Colors for UI */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--gray-50);
+}
+
+/* Adecco Theme Utility Classes */
+.bg-adecco-red {
+  background-color: var(--adecco-red);
+}
+
+.bg-adecco-gray {
+  background-color: var(--adecco-gray);
+}
+
+.text-adecco-red {
+  color: var(--adecco-red);
+}
+
+.border-adecco-red {
+  border-color: var(--adecco-red);
+}
+
+.bg-poetic-green {
+  background-color: var(--poetic-green);
+}
+
+.text-poetic-green {
+  color: var(--poetic-green);
+}
+
+.bg-dusk-orange {
+  background-color: var(--dusk-orange);
+}
+
+.text-dusk-orange {
+  color: var(--dusk-orange);
+}
+
+.bg-heavy-red {
+  background-color: var(--heavy-red);
+}
+
+.text-heavy-red {
+  color: var(--heavy-red);
+}
+
+/* Adecco Button Styles */
+.btn-adecco-primary {
+  background-color: var(--adecco-gray);
+  color: white;
+  border: 2px solid var(--adecco-gray);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-adecco-primary:hover {
+  background-color: var(--color-gray-950);
+  color: white;
+}
+
+.btn-adecco-secondary {
+  background-color: white;
+  color: var(--adecco-red);
+  border: 2px solid var(--adecco-red);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-adecco-secondary:hover {
+  background-color: var(--adecco-red);
+  color: white;
+}
+
+/* Adecco Card Styles */
+.card-adecco {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid var(--adecco-red);
+  transition: all 0.3s ease;
+}
+
+.card-adecco:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Adecco Gradient Backgrounds */
+.bg-adecco-gradient {
+  background: linear-gradient(135deg, var(--adecco-red) 0%, var(--heavy-red) 100%);
+}
+
+.bg-adecco-light-gradient {
+  background: linear-gradient(135deg, var(--gray-50) 0%, white 100%);
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

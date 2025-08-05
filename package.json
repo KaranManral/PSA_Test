@@ -1,0 +1,40 @@
+{
+  "name": "job-board",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "dev:miaw": "node -e \"console.log('Starting MIAW-enabled development server...')\" && next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "start:miaw": "node -e \"console.log('🚀 Starting MIAW Production Server...')\" && next start",
+    "lint": "next lint",
+    "validate:miaw": "node -e \"console.log('🔍 Validating MIAW Configuration...'); require('dotenv').config({ path: '.env.local' }); const required = ['SF_ORG_ID', 'MIAW_SCRT_URL', 'MIAW_DEVELOPER_NAME']; const missing = required.filter(v => !process.env[v]); if (missing.length) { console.error('❌ Missing variables:', missing.join(', ')); process.exit(1); } else { console.log('✅ All required variables found'); }\""
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "crypto": "^1.0.1",
+    "dompurify": "^3.2.6",
+    "eventsource": "^4.0.0",
+    "framer-motion": "^12.19.1",
+    "fs": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.523.0",
+    "next": "15.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

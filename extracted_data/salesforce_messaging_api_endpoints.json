@@ -1,0 +1,137 @@
+{
+  "source": "https://developer.salesforce.com/docs/service/messaging-api/references/miaw-api-reference?meta=Summary",
+  "title": "Messaging for In-App and Web API Endpoints",
+  "api_info": {
+    "version": "2.0.0",
+    "description": "Public REST API for Messaging for In-App and Web",
+    "base_url": "https://{scrt-url}"
+  },
+  "endpoints_extracted_from_navigation": [
+    {
+      "name": "Generate access token for authenticated user",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=generateAccessTokenForAuthenticatedUser",
+      "meta_parameter": "generateAccessTokenForAuthenticatedUser"
+    },
+    {
+      "name": "Revoke token",
+      "method": "DELETE",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=revokeToken",
+      "meta_parameter": "revokeToken"
+    },
+    {
+      "name": "Generate access token for unauthenticated user",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=generateAccessTokenForUnauthenticatedUser",
+      "meta_parameter": "generateAccessTokenForUnauthenticatedUser"
+    },
+    {
+      "name": "Generate continuation token",
+      "method": "GET",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=generateContinuationToken",
+      "meta_parameter": "generateContinuationToken"
+    },
+    {
+      "name": "Create conversation",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=createConversation",
+      "meta_parameter": "createConversation"
+    },
+    {
+      "name": "Add typing indicator to a conversation",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=addTypingIndicatorToAConversation",
+      "meta_parameter": "addTypingIndicatorToAConversation"
+    },
+    {
+      "name": "Send message",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=sendMessage",
+      "meta_parameter": "sendMessage"
+    },
+    {
+      "name": "Send delivery acknowledgements or read receipts",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=sendDeliveryAcknowledgementsOrReadReceipts",
+      "meta_parameter": "sendDeliveryAcknowledgementsOrReadReceipts"
+    },
+    {
+      "name": "Send file",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=sendFile",
+      "meta_parameter": "sendFile"
+    },
+    {
+      "name": "Close conversation",
+      "method": "DELETE",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=closeConversation",
+      "meta_parameter": "closeConversation"
+    },
+    {
+      "name": "Retrieve conversation routing status",
+      "method": "GET",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=retrieveConversationRoutingStatus",
+      "meta_parameter": "retrieveConversationRoutingStatus"
+    },
+    {
+      "name": "End messaging session",
+      "method": "DELETE",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=endMessagingSession",
+      "meta_parameter": "endMessagingSession"
+    },
+    {
+      "name": "List conversations",
+      "method": "GET",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=listConversations",
+      "meta_parameter": "listConversations"
+    },
+    {
+      "name": "List conversation entries",
+      "method": "GET",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=listConversationEntries",
+      "meta_parameter": "listConversationEntries"
+    },
+    {
+      "name": "Retrieve conversation transcript",
+      "method": "GET",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=retrieveConversationTranscript",
+      "meta_parameter": "retrieveConversationTranscript"
+    },
+    {
+      "name": "Register device for push notifications",
+      "method": "POST",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=registerDeviceForPushNotifications",
+      "meta_parameter": "registerDeviceForPushNotifications"
+    },
+    {
+      "name": "Unregister device from push notifications",
+      "method": "DELETE",
+      "url": "/docs/service/messaging-api/references/miaw-api-reference?meta=unregisterDeviceFromPushNotifications",
+      "meta_parameter": "unregisterDeviceFromPushNotifications"
+    }
+  ],
+  "navigation_links": [
+    {
+      "text": "Overview",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/overview",
+      "type": "navigation"
+    },
+    {
+      "text": "Guides",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/guide/get-started.html",
+      "type": "navigation"
+    },
+    {
+      "text": "Reference",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references",
+      "type": "navigation"
+    },
+    {
+      "text": "About",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api/references/about",
+      "type": "navigation"
+    }
+  ],
+  "total_endpoints": 17,
+  "extraction_timestamp": "2025-01-04"
+}

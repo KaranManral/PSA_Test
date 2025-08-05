@@ -1,0 +1,141 @@
+{
+  "source": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app",
+  "repository_info": {
+    "name": "messaging-web-api-sample-app",
+    "owner": "Salesforce-Async-Messaging",
+    "full_name": "Salesforce-Async-Messaging/messaging-web-api-sample-app",
+    "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app",
+    "description": "A sample app created using React JS library to demonstrate Messaging for Web using SCRT2 Public (aka v2.0) REST APIs",
+    "visibility": "public",
+    "stars": 24,
+    "forks": 12,
+    "watchers": 5,
+    "open_issues": 6,
+    "pull_requests": 1,
+    "languages": [
+      {
+        "name": "JavaScript",
+        "percentage": "97.4%"
+      },
+      {
+        "name": "CSS",
+        "percentage": "1.9%"
+      },
+      {
+        "name": "HTML",
+        "percentage": "0.7%"
+      }
+    ]
+  },
+  "file_structure": [
+    {
+      "name": "build",
+      "type": "directory",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/tree/main/build",
+      "last_commit": "pushing latest build artifacts",
+      "last_commit_date": "Jul 18, 2024"
+    },
+    {
+      "name": "public",
+      "type": "directory",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/tree/main/public",
+      "last_commit": "@W-15621028 final repo touches",
+      "last_commit_date": "May 16, 2024"
+    },
+    {
+      "name": "src",
+      "type": "directory",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/tree/main/src",
+      "last_commit": "add the same error handling to handleExistingConversation() as well",
+      "last_commit_date": "Jul 16, 2024"
+    },
+    {
+      "name": ".gitignore",
+      "type": "file",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/blob/main/.gitignore",
+      "last_commit": "First commit - pushing local repo to remote",
+      "last_commit_date": "Apr 27, 2024"
+    },
+    {
+      "name": "CODEOWNERS",
+      "type": "file",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/blob/main/CODEOWNERS",
+      "last_commit": "@W-14852453 Updated/Added CODEOWNERS as per https://salesforce-intern…",
+      "last_commit_date": "Apr 26, 2024"
+    },
+    {
+      "name": "README.md",
+      "type": "file",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/blob/main/README.md",
+      "last_commit": "Update README.md",
+      "last_commit_date": "Jul 18, 2024"
+    },
+    {
+      "name": "package-lock.json",
+      "type": "file",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/blob/main/package-lock.json",
+      "last_commit": "Add functional MessagingHeader cmp and js doc, refactor",
+      "last_commit_date": "May 9, 2024"
+    },
+    {
+      "name": "package.json",
+      "type": "file",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/blob/main/package.json",
+      "last_commit": "@W-15621028 final repo touches",
+      "last_commit_date": "May 16, 2024"
+    }
+  ],
+  "readme_content": {
+    "title": "Salesforce Messaging for Web API Sample App",
+    "description": "A repository holding a sample app created using React JS library to demonstrate the Messaging experience using Messaging for In-App and Web Public (aka v2.0) REST APIs.",
+    "api_documentation_link": "https://developer.salesforce.com/docs/service/messaging-api",
+    "live_demo_link": "https://salesforce-async-messaging.github.io/messaging-web-api-sample-app/build/index.html",
+    "prerequisites": "Ensure you have an Embedded Service deployment for Messaging for In-App and Web created of type Custom Client.",
+    "tech_stack": "React JS",
+    "build_tool": "Create React App",
+    "installation_commands": [
+      "git clone https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app.git",
+      "cd messaging-web-api-sample-app",
+      "npm install",
+      "npm run build",
+      "npm start"
+    ],
+    "local_server": "http://localhost:3000",
+    "testing_note": "[Local Testing Only] - Disable Strict Mode in the React App by going to src/index.js and comment out React.StrictMode encapsulating the <App />"
+  },
+  "contributors": [
+    {
+      "username": "sachinhreddy-sfdc",
+      "name": "Sachin H Reddy",
+      "profile_url": "https://github.com/sachinhreddy-sfdc"
+    },
+    {
+      "username": "tiffanytso-sfdc",
+      "profile_url": "https://github.com/tiffanytso-sfdc"
+    }
+  ],
+  "related_links": [
+    {
+      "text": "Wiki - Current App Support",
+      "url": "https://github.com/Salesforce-Async-Messaging/messaging-web-api-sample-app/wiki/Current-App-Support",
+      "type": "documentation"
+    },
+    {
+      "text": "Salesforce Messaging API Documentation",
+      "url": "https://developer.salesforce.com/docs/service/messaging-api",
+      "type": "external_documentation"
+    },
+    {
+      "text": "Create React App",
+      "url": "https://github.com/facebook/create-react-app",
+      "type": "framework"
+    },
+    {
+      "text": "Live Demo Application",
+      "url": "https://salesforce-async-messaging.github.io/messaging-web-api-sample-app/build/index.html",
+      "type": "demo"
+    }
+  ],
+  "total_commits": 68,
+  "extraction_timestamp": "2025-01-04"
+}
