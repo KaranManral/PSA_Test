@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { MiawApiClient } from "@/app/lib/miawApiService";
+import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   try {
     sessionData = JSON.parse(chatSession);
   } catch (error) {
+    console.log(error);
     return NextResponse.json(
       { message: "Invalid session data. Start a new session." },
       { status: 400 }
@@ -69,17 +71,26 @@ export async function POST(req: NextRequest) {
 
     // Send the actual message
     if (msg) {
-      const messageData = await miawClient.sendMessage(conversationId, msg);
+      const messageId = randomUUID();
+      const messageData = await miawClient.sendMessage(
+        conversationId,
+        msg,
+        messageId,
+        '', // inReplyToMessageId
+        false, // isNewMessagingSession
+        { jobApplicationNumber: 'JAR-0001' }, // routingAttributes
+        'en_US' // language
+      );
 
       // Format response to match existing interface
       const formattedResponse = {
         message: "success",
         data: [
           {
-            id: messageData.id || `msg-${Date.now()}`,
-            message: messageData.text || msg,
+            id: messageData.id,
+            message: messageData.staticContent?.text || msg,
             type: "user",
-            timestamp: new Date().toISOString()
+            timestamp: messageData.timestamp
           }
         ]
       };

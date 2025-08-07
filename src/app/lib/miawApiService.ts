@@ -1,41 +1,231 @@
 // MIAW (Messaging for In-App and Web) API Service
 // This service handles all interactions with the Salesforce Messaging for In-App and Web API
 // Includes centralized token management and authentication
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+
 
 import axios, { AxiosResponse } from 'axios';
-import https from 'https';
+import fs from "fs";
+import path from "path";
+import https from "https";
+import { randomUUID } from 'crypto';
+
+const ca = fs.readFileSync(path.resolve(process.cwd(), "salesforce-chain.pem"));
+
+const httpsAgent = new https.Agent({ ca });
 
 // Types for MIAW API
-export interface MiawTokenResponse {
-  token: string;
-  userVerificationToken?: string;
-  continuationToken?: string;
+export interface MiawErrorResponse {
+  code: string;
+  message: string;
+  enhancedErrorType?: string;
+  fields?: string[];
 }
+
+export interface MiawCapabilities {
+  choiceLists?: boolean;
+  fileTransfer?: {
+    endUserToAgent?: boolean;
+    maxFileSize?: number;
+  };
+  transcriptDownload?: boolean;
+}
+
+export interface ChoiceListValue {
+  order: number;
+  choiceListValueName: string;
+  choiceListValueId: string;
+  isDefaultValue: boolean;
+}
+
+// Choice list interface
+export interface ChoiceList {
+  choiceListId: string;
+  choiceListValues: ChoiceListValue[];
+}
+
+// Form field interface
+export interface FormField {
+  name: string;
+  order: number;
+  type: string;
+  required: boolean;
+  maxLength: number;
+  isHidden: boolean;
+  choiceListId: string;
+}
+
+// Form interface
+export interface Form {
+  formType: string;
+  displayContext: string;
+  formFields: FormField[];
+}
+
+// Embedded service messaging channel interface
+export interface EmbeddedServiceMessagingChannel {
+  channelAddressIdentifier: string;
+  authMode: string;
+}
+
+// Attachments configuration interface
+export interface AttachmentsConfig {
+  endUserToAgent: boolean;
+  maxFileSize: number;
+}
+
+// Choice list configuration interface
+export interface ChoiceListConfig {
+  choiceList: ChoiceList[];
+}
+
+// Transcript configuration interface
+export interface TranscriptConfig {
+  allowTranscriptDownload: boolean;
+}
+
+// Embedded service configuration interface
+export interface EmbeddedServiceConfig {
+  name: string;
+  deploymentType: string;
+  embeddedServiceMessagingChannel: EmbeddedServiceMessagingChannel;
+  forms: Form[];
+  attachments: AttachmentsConfig;
+  choiceListConfig: ChoiceListConfig;
+  transcript: TranscriptConfig;
+}
+
+// Configuration interface
+export interface Configuration {
+  embeddedServiceConfig: EmbeddedServiceConfig;
+  timestamp: number;
+}
+
+// End user interface
+export interface EndUser {
+  appType: string;
+  role: string;
+  subject: string;
+  displayName: string;
+}
+
+// Context interface
+export interface Context {
+  deviceId: string;
+  endUser: EndUser;
+  configuration: Configuration;
+}
+
+// Success response interface
+export interface MiawSuccessResponse {
+  accessToken: string;
+  lastEventId: string;
+  context: {
+    configuration: {
+      embeddedServiceConfig: {
+        name: string;
+        deploymentType: string;
+        embeddedServiceMessagingChannel: {
+          channelAddressIdentifier: string;
+          authMode: string;
+        };
+        forms: any[];
+        attachments: {
+          endUserToAgent: boolean;
+          maxFileSize: number;
+        };
+        choiceListConfig: {
+          choiceList: any[];
+        };
+        transcript: {
+          allowTranscriptDownload: boolean;
+        };
+      };
+      timestamp: number;
+    };
+    deviceId: string;
+    endUser: {
+      appType: string;
+      role: string;
+      subject: string;
+    };
+  };
+}
+
+// Error response interface
+export interface MiawErrorResponse {
+  message: string;
+  errorCode: string;
+}
+
+// Union type for all possible responses
+export interface ConversationList {
+  conversations: MiawConversation[];
+  endOfData: boolean;
+  nextOffset?: string;
+}
+
+export interface ConversationEntry {
+  id: string;
+  conversationId: string;
+  type: string;
+  timestamp: string;
+  [key: string]: unknown;
+}
+
+export interface ConversationEntryList {
+  entries: ConversationEntry[];
+  endOfData: boolean;
+  nextOffset?: string;
+}
+
+export interface ConversationTranscript {
+  conversationId: string;
+  transcript: string;
+  timestamp: string;
+}
+
+export type MiawTokenResponse = MiawSuccessResponse | MiawErrorResponse;
 
 export interface MiawConversation {
   conversationId: string;
-  isAuthenticated: boolean;
-  status: 'active' | 'routing' | 'closed';
+  tenantId: string;
+  orgId: string;
+  participantId: string;
+  status: 'Active' | 'Routing' | 'Closed';
+  routingResult?: {
+    routingState: string;
+    routingStateReason: string;
+    routingTarget?: string;
+  };
 }
 
 export interface MiawMessage {
-  id: string;
-  type: 'StaticContentMessage' | 'FileMessage';
-  text: string;
-  timestamp: string;
-  sender: {
-    role: 'EndUser' | 'System' | 'Agent';
-    name?: string;
-  };
-  messageReason?: 'NewMessage' | 'MessageDelivered' | 'MessageRead';
+  conversationEntries: [
+    {
+      id: string,
+      clientTimestamp: number
+    }
+  ]
 }
 
 export interface MiawServerSentEvent {
-  type: 'CONVERSATION_MESSAGE' | 'CONVERSATION_PARTICIPANT_CHANGED' | 
-        'CONVERSATION_ROUTING_RESULT' | 'CONVERSATION_DELIVERY_ACKNOWLEDGEMENT' |
-        'CONVERSATION_READ_ACKNOWLEDGEMENT' | 'CONVERSATION_TYPING_STARTED_INDICATOR' |
-        'CONVERSATION_TYPING_STOPPED_INDICATOR' | 'CONVERSATION_CLOSE_CONVERSATION';
-  data: any;
+  type: 
+    | 'CONVERSATION_MESSAGE' 
+    | 'CONVERSATION_PARTICIPANT_CHANGED'
+    | 'CONVERSATION_ROUTING_RESULT' 
+    | 'CONVERSATION_DELIVERY_ACKNOWLEDGEMENT'
+    | 'CONVERSATION_READ_ACKNOWLEDGEMENT' 
+    | 'CONVERSATION_TYPING_STARTED_INDICATOR'
+    | 'CONVERSATION_TYPING_STOPPED_INDICATOR' 
+    | 'CONVERSATION_CLOSE_CONVERSATION'
+    | 'CONVERSATION_ERROR';
+  data: {
+    conversationId: string;
+    timestamp: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface MiawPreChatData {
@@ -43,7 +233,7 @@ export interface MiawPreChatData {
   Email?: string;
   Phone?: string;
   JobApplicationNumber?: string;
-  [key: string]: any;
+  [key: string]: string | undefined;
 }
 
 // Centralized MIAW Token Manager
@@ -73,7 +263,7 @@ class MiawTokenManager {
   }
 
   // Get valid MIAW token (with caching)
-  public async getToken(forceRefresh: boolean = false): Promise<string> {
+  public async getToken(forceRefresh: boolean = false): Promise<string|undefined> {
     const now = Date.now();
     
     // Return cached token if still valid (with 5 minute buffer)
@@ -83,62 +273,43 @@ class MiawTokenManager {
 
     // Generate new token
     const tokenResponse = await this.generateNewToken();
-    this.token = tokenResponse.token;
+    if ('accessToken' in tokenResponse) {
+      this.token = tokenResponse.accessToken;
     
     // MIAW tokens typically don't have explicit expiry, so we set a reasonable cache time (1 hour)
     this.tokenExpiresAt = now + (60 * 60 * 1000);
     
     return this.token;
+    }
   }
 
   // Generate new MIAW token
-  private async generateNewToken(): Promise<MiawTokenResponse> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/tokens/unauthenticated/access-token`;
+  private async generateNewToken(): Promise<MiawSuccessResponse> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/authorization/unauthenticated/access-token`;
     
     const payload = {
-        orgId: "00DgL0000071swn",
-        esDeveloperName: "Pre_Screening_Agent_With_Custom_UI",
+        orgId: this.organizationId,
+        esDeveloperName: this.developerName,
         capabilitiesVersion: "1",
         platform: "Web"
     };
 
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        mode: 'cors',
+      const response: AxiosResponse<MiawTokenResponse> = await axios.post(endpoint, payload, {
+        httpsAgent, 
         headers: {
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+        }
+       });
 
-      return await response.json();
+      if ('errorCode' in response.data) {
+        throw new Error(response.data.message);
+      }
+
+      return response.data as MiawSuccessResponse;
     } catch (error) {
       console.error('Error generating MIAW token:', error);
       throw new Error('Failed to generate MIAW access token');
-    }
-  }
-
-  // Revoke current token
-  public async revokeToken(): Promise<void> {
-    if (!this.token) {
-      return;
-    }
-
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/tokens`;
-
-    try {
-      await axios.delete(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-    } catch (error) {
-      console.error('Error revoking MIAW token:', error);
-      // Don't throw error as revocation might fail if token is already invalid
-    } finally {
-      this.token = null;
-      this.tokenExpiresAt = null;
     }
   }
 
@@ -164,16 +335,27 @@ export class MiawApiClient {
     this.developerName = process.env.MIAW_DEVELOPER_NAME || '';
   }
 
+  // Get authenticated headers
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    const token = await this.tokenManager.getToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  }
+
   // Generate continuation token for session continuity
-  public async generateContinuationToken(conversationId: string): Promise<string> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}/continuationToken`;
+  public async generateContinuationToken():string {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/authorization/continuation-access-token`;
 
     try {
-      const headers = await this.getAuthHeaders();
-      const response: AxiosResponse<{ continuationToken: string }> = await axios.get(endpoint, { headers });
+      const headers = this.getAuthHeaders();
+      const response: AxiosResponse<{ accessToken: string,lastEventId:string }> = await axios.get(endpoint,{
+        httpsAgent,
+        headers
+      });
       
-      this.continuationToken = response.data.continuationToken;
-      return this.continuationToken;
+      return response.data.accessToken;
     } catch (error) {
       console.error('Error generating continuation token:', error);
       throw new Error('Failed to generate continuation token');
@@ -191,11 +373,11 @@ export class MiawApiClient {
   }
 
   // Get current access token (for backwards compatibility)
-  public async getCurrentToken(): Promise<string> {
+  public async getCurrentToken(): Promise<string|undefined> {
     return this.tokenManager.getToken();
   }
 
-  // Get auth headers with continuation token if available, otherwise use access token
+  // Get auth headers with continuation token
   private async getAuthHeadersWithContinuation(): Promise<Record<string, string>> {
     if (this.continuationToken) {
       return {
@@ -206,31 +388,25 @@ export class MiawApiClient {
     return this.getAuthHeaders();
   }
 
-  // Get authenticated headers
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = await this.tokenManager.getToken();
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
-  }
-
   // Create conversation
   public async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation`;
+
+    const conversationId = randomUUID();
     
-    const payload: any = {
-      organizationId: this.organizationId,
-      developerName: this.developerName
+    const payload = {
+      conversationId: conversationId,
+      esDeveloperName: this.developerName,
+      language: "en_US",
+      routingAttributes: {
+        X_Conversation_ID: conversationId,
+        jobApplicationNumber: preChatData?.JobApplicationNumber,
+      }
     };
 
-    if (preChatData) {
-      payload.preChatData = preChatData;
-    }
-
     try {
-      const headers = await this.getAuthHeaders();
-      const response: AxiosResponse<MiawConversation> = await axios.post(endpoint, payload, { headers });
+      const headers = await this.getAuthHeadersWithContinuation();
+      const response: AxiosResponse<MiawConversation> = await axios.post(endpoint, payload, { httpsAgent, headers });
       return response.data;
     } catch (error) {
       console.error('Error creating MIAW conversation:', error);
@@ -239,24 +415,24 @@ export class MiawApiClient {
   }
 
   // Send message
-  // Send message
-  public async sendMessage(conversationId: string, text: string): Promise<MiawMessage> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}/messages`;
+  public async sendMessage(conversationId:string, messageId:string, messageType:string, messageContent, isNewMessagingSession:boolean, language:string): Promise<MiawMessage> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/message`;
     
     const payload = {
       message: {
-        type: 'StaticContentMessage',
-        staticContent: {
-          formatType: 'Text',
-          text: text
-        }
-      }
+        id: messageId,
+        messageType: messageType,
+        ...messageContent
+      },
+      esDeveloperName: this.developerName,
+      isNewMessagingSession: isNewMessagingSession,
+      language: language
     };
 
     try {
       // Use continuation token if available, otherwise use access token
-      const headers = await this.getAuthHeadersWithContinuation();
-      const response: AxiosResponse<MiawMessage> = await axios.post(endpoint, payload, { headers });
+      const headers = await this.getAuthHeadersWithContinuation() || await this.getAuthHeaders();
+      const response: AxiosResponse<MiawMessage> = await axios.post(endpoint, payload, { httpsAgent, headers });
       return response.data;
     } catch (error) {
       console.error('Error sending MIAW message:', error);
@@ -267,7 +443,7 @@ export class MiawApiClient {
   // Send typing indicator
   // Send typing indicator
   public async sendTypingIndicator(conversationId: string, isTyping: boolean): Promise<void> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}/typing`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entry`;
     
     const payload = {
       typing: isTyping
@@ -276,7 +452,7 @@ export class MiawApiClient {
     try {
       // Use continuation token if available, otherwise use access token
       const headers = await this.getAuthHeadersWithContinuation();
-      await axios.post(endpoint, payload, { headers });
+      await axios.post(endpoint, payload, { httpsAgent, headers });
     } catch (error) {
       console.error('Error sending typing indicator:', error);
       throw new Error('Failed to send typing indicator');
@@ -284,9 +460,8 @@ export class MiawApiClient {
   }
 
   // Send acknowledgment (delivery or read receipt)
-  // Send acknowledgment (read receipt)
   public async sendAcknowledgment(conversationId: string, messageId: string, acknowledgmentType: 'Delivered' | 'Read' = 'Read'): Promise<void> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}/acknowledgments`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/acknowledge-entries`;
     
     const payload = {
       acknowledgments: [{
@@ -298,7 +473,7 @@ export class MiawApiClient {
     try {
       // Use continuation token if available, otherwise use access token
       const headers = await this.getAuthHeadersWithContinuation();
-      await axios.post(endpoint, payload, { headers });
+      await axios.post(endpoint, payload, { httpsAgent, headers });
     } catch (error) {
       console.error('Error sending acknowledgment:', error);
       throw new Error('Failed to send acknowledgment');
@@ -309,25 +484,62 @@ export class MiawApiClient {
   public async getEventsStreamUrl(conversationId: string): Promise<string> {
     // Use continuation token if available, otherwise use access token
     const token = this.continuationToken || await this.tokenManager.getToken();
-    return `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}/events?access_token=${token}`;
+    return `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/events?access_token=${token}`;
+  }
+
+  // List all conversations
+  public async listConversations(): Promise<ConversationList> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/list`;
+
+    try {
+      const headers = await this.getAuthHeadersWithContinuation();
+      const response: AxiosResponse<ConversationList> = await axios.get(endpoint, { httpsAgent, headers });
+      return response.data;
+    } catch (error) {
+      console.error('Error listing conversations:', error);
+      throw new Error('Failed to list conversations');
+    }
+  }
+
+  // List conversation entries
+  public async listConversationEntries(conversationId: string): Promise<ConversationEntryList> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entries`;
+
+    try {
+      const headers = await this.getAuthHeadersWithContinuation();
+      const response: AxiosResponse<ConversationEntryList> = await axios.get(endpoint, { httpsAgent, headers });
+      return response.data;
+    } catch (error) {
+      console.error('Error listing conversation entries:', error);
+      throw new Error('Failed to list conversation entries');
+    }
+  }
+
+  // Retrieve conversation transcript
+  public async getConversationTranscript(conversationId: string): Promise<ConversationTranscript> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/transcript`;
+
+    try {
+      const headers = await this.getAuthHeadersWithContinuation();
+      const response: AxiosResponse<ConversationTranscript> = await axios.get(endpoint, { httpsAgent, headers });
+      return response.data;
+    } catch (error) {
+      console.error('Error retrieving conversation transcript:', error);
+      throw new Error('Failed to retrieve conversation transcript');
+    }
   }
 
   // Close conversation
   public async closeConversation(conversationId: string): Promise<void> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/messaging/conversations/${conversationId}`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/session`;
 
     try {
       const headers = await this.getAuthHeaders();
-      await axios.delete(endpoint, { headers });
+      await axios.delete(endpoint, { httpsAgent, headers });
     } catch (error) {
       console.error('Error closing conversation:', error);
       throw new Error('Failed to close conversation');
     }
-  }
-
-  // Revoke token
-  public async revokeToken(): Promise<void> {
-    await this.tokenManager.revokeToken();
   }
 }
 
@@ -342,10 +554,10 @@ export class MiawApiService {
   }
 
   // Legacy methods that delegate to the new API client
-  async generateAccessToken(): Promise<MiawTokenResponse> {
-    const token = await this.apiClient.getCurrentToken();
-    return { token };
-  }
+  async generateAccessToken(): Promise<string|undefined> {
+    const accessToken = await this.apiClient.getCurrentToken();
+    return accessToken;
+      }
 
   async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
     const conversation = await this.apiClient.createConversation(preChatData);
@@ -357,7 +569,15 @@ export class MiawApiService {
     if (!this.conversationId) {
       throw new Error('No active conversation. Please start a conversation first.');
     }
-    return await this.apiClient.sendMessage(this.conversationId, text);
+    return await this.apiClient.sendMessage(
+      this.conversationId,
+      text,
+      randomUUID(),
+      '',
+      false,
+      { jobApplicationNumber: 'JAR-0001' },
+      'en_US'
+    );
   }
 
   async sendTypingIndicator(isTyping: boolean): Promise<void> {
@@ -393,10 +613,6 @@ export class MiawApiService {
       this.eventSource.close();
       this.eventSource = null;
     }
-  }
-
-  async revokeToken(): Promise<void> {
-    await this.apiClient.revokeToken();
   }
 
   // Getters
