@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // Initialize MIAW API client (handles token management internally)
-    const miawClient = new MiawApiClient();
+    const miawClient = MiawApiClient.getInstance();
 
     // Set continuation token if available for session-based operations
     if (continuationToken) {

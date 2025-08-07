@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Initialize MIAW API client (handles token management internally)
-    const miawClient = new MiawApiClient();
+    const miawClient = MiawApiClient.getInstance();
 
     // Create conversation with pre-chat data
     const preChatData = {
@@ -38,17 +38,12 @@ export async function POST(req: NextRequest) {
       SessionId: randomUUID()
     };
 
-    // Get access token first
-    const accessToken = await miawClient.getCurrentToken();
-    if (!accessToken) {
-      throw new Error("Failed to obtain access token");
-    }
-
+    // Create conversation (this will auto-generate continuation token)
     const conversationData = await miawClient.createConversation(preChatData);
 
-    // Generate continuation token for session continuity
-    const continuationTokenResponse = await miawClient.generateContinuationToken();
-    const continuationToken = continuationTokenResponse.accessToken;
+    // Get tokens for response
+    const accessToken = await miawClient.getCurrentToken();
+    const continuationToken = miawClient.getContinuationToken();
 
     // Prepare the session object to store in a cookie
     const session = {
@@ -64,7 +59,6 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString()
         }
       ],
-      sessionId: conversationData.conversationId, // For compatibility with existing code
       isAuthenticated: conversationData.status === 'Active'
     };
 

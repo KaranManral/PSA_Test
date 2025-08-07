@@ -39,14 +39,14 @@ export async function DELETE(req: NextRequest) {
 
   try {
     // Initialize MIAW API client (handles token management internally)
-    const miawClient = new MiawApiClient();
+    const miawClient = MiawApiClient.getInstance();
 
     // Set continuation token if available for session-based operations
     if (continuationToken) {
       miawClient.setContinuationToken(continuationToken);
     }
 
-    // End the conversation and revoke token
+    // End the conversation (this will automatically clear continuation token)
     await miawClient.closeConversation(conversationId);
 
     // Prepare the response and delete the session cookie

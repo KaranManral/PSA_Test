@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Initialize MIAW API client (handles token management internally)
-    const miawClient = new MiawApiClient();
+    const miawClient = MiawApiClient.getInstance();
 
     // Set continuation token if available for session-based operations
     if (continuationToken) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     // Handle typing indicator if requested
     if (typingIndicator !== undefined) {
-      await miawClient.sendTypingIndicator(conversationId, typingIndicator);
+      await miawClient.sendTypingIndicator(conversationId, randomUUID());
 
       // If only typing indicator, return success
       if (!msg) {
@@ -72,13 +72,19 @@ export async function POST(req: NextRequest) {
     // Send the actual message
     if (msg) {
       const messageId = randomUUID();
+      const messageContent = {
+        staticContent: {
+          formatType: "Text",
+          text: msg
+        }
+      };
+
       const messageData = await miawClient.sendMessage(
         conversationId,
-        msg,
         messageId,
-        '', // inReplyToMessageId
+        'StaticContentMessage', // messageType
+        messageContent,
         false, // isNewMessagingSession
-        { jobApplicationNumber: 'JAR-0001' }, // routingAttributes
         'en_US' // language
       );
 
@@ -87,10 +93,10 @@ export async function POST(req: NextRequest) {
         message: "success",
         data: [
           {
-            id: messageData.id,
-            message: messageData.staticContent?.text || msg,
+            id: messageId,
+            message: msg,
             type: "user",
-            timestamp: messageData.timestamp
+            timestamp: new Date().toISOString()
           }
         ]
       };

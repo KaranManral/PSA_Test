@@ -5,22 +5,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { MiawApiClient } from "@/app/lib/miawApiService";
+import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messageId, acknowledgmentType } = body;
+  const { acknowledgmentType } = body;
 
-  // Validate required parameters
-  if (!messageId) {
+  if (!acknowledgmentType || !['Delivery', 'Read'].includes(acknowledgmentType)) {
     return NextResponse.json(
-      { message: "Message ID is required" },
-      { status: 400 }
-    );
-  }
-
-  if (!acknowledgmentType || !['Delivered', 'Read'].includes(acknowledgmentType)) {
-    return NextResponse.json(
-      { message: "Valid acknowledgment type (Delivered or Read) is required" },
+      { message: "Valid acknowledgment type (Delivery or Read) is required" },
       { status: 400 }
     );
   }
@@ -56,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Initialize MIAW API client (handles token management internally)
-    const miawClient = new MiawApiClient();
+    const miawClient = MiawApiClient.getInstance();
 
     // Set continuation token if available for session-based operations
     if (continuationToken) {
@@ -64,7 +57,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Send acknowledgment using continuation token when available
-    await miawClient.sendAcknowledgment(conversationId, messageId, acknowledgmentType);
+    // Map from external API format to internal format
+    const mappedAckType = acknowledgmentType === 'Delivery' ? 'Delivery' : 'Read';
+    await miawClient.sendAcknowledgment(conversationId, randomUUID(), mappedAckType);
 
     return NextResponse.json(
       { message: "success", acknowledgmentType },

@@ -16,12 +16,6 @@ const ca = fs.readFileSync(path.resolve(process.cwd(), "salesforce-chain.pem"));
 const httpsAgent = new https.Agent({ ca });
 
 // Types for MIAW API
-export interface MiawErrorResponse {
-  code: string;
-  message: string;
-  enhancedErrorType?: string;
-  fields?: string[];
-}
 
 export interface MiawCapabilities {
   choiceLists?: boolean;
@@ -190,15 +184,7 @@ export type MiawTokenResponse = MiawSuccessResponse | MiawErrorResponse;
 
 export interface MiawConversation {
   conversationId: string;
-  tenantId: string;
-  orgId: string;
-  participantId: string;
   status: 'Active' | 'Routing' | 'Closed';
-  routingResult?: {
-    routingState: string;
-    routingStateReason: string;
-    routingTarget?: string;
-  };
 }
 
 export interface MiawMessage {
@@ -229,23 +215,22 @@ export interface MiawServerSentEvent {
 }
 
 export interface MiawPreChatData {
-  Name?: string;
-  Email?: string;
-  Phone?: string;
   JobApplicationNumber?: string;
+  SessionId?: string;
   [key: string]: string | undefined;
 }
 
-// Centralized MIAW Token Manager
-class MiawTokenManager {
-  private static instance: MiawTokenManager;
+// Centralized MIAW API functions for use in API routes
+export class MiawApiClient {
+  private static instance: MiawApiClient;
   private token: string | null = null;
   private tokenExpiresAt: number | null = null;
   private baseUrl: string;
   private organizationId: string;
   private developerName: string;
+  private continuationToken: string | null = null;
 
-  private constructor() {
+  constructor() {
     this.baseUrl = process.env.MIAW_SCRT_URL || '';
     this.organizationId = process.env.SF_ORG_ID || '';
     this.developerName = process.env.MIAW_DEVELOPER_NAME || '';
@@ -255,15 +240,15 @@ class MiawTokenManager {
     }
   }
 
-  public static getInstance(): MiawTokenManager {
-    if (!MiawTokenManager.instance) {
-      MiawTokenManager.instance = new MiawTokenManager();
+  public static getInstance(): MiawApiClient {
+    if (!MiawApiClient.instance) {
+      MiawApiClient.instance = new MiawApiClient();
     }
-    return MiawTokenManager.instance;
+    return MiawApiClient.instance;
   }
 
   // Get valid MIAW token (with caching)
-  public async getToken(forceRefresh: boolean = false): Promise<string|undefined> {
+  private async getToken(forceRefresh: boolean = false): Promise<string> {
     const now = Date.now();
     
     // Return cached token if still valid (with 5 minute buffer)
@@ -275,12 +260,12 @@ class MiawTokenManager {
     const tokenResponse = await this.generateNewToken();
     if ('accessToken' in tokenResponse) {
       this.token = tokenResponse.accessToken;
-    
-    // MIAW tokens typically don't have explicit expiry, so we set a reasonable cache time (1 hour)
-    this.tokenExpiresAt = now + (60 * 60 * 1000);
-    
-    return this.token;
+      // MIAW tokens typically don't have explicit expiry, so we set a reasonable cache time (1 hour)
+      this.tokenExpiresAt = now + (60 * 60 * 1000);
+      return this.token;
     }
+    
+    throw new Error('Failed to get valid access token');
   }
 
   // Generate new MIAW token
@@ -288,10 +273,10 @@ class MiawTokenManager {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/authorization/unauthenticated/access-token`;
     
     const payload = {
-        orgId: this.organizationId,
-        esDeveloperName: this.developerName,
-        capabilitiesVersion: "1",
-        platform: "Web"
+      orgId: this.organizationId,
+      esDeveloperName: this.developerName,
+      capabilitiesVersion: "1",
+      platform: "Web"
     };
 
     try {
@@ -300,10 +285,10 @@ class MiawTokenManager {
         headers: {
           'Content-Type': 'application/json'
         }
-       });
+      });
 
       if ('errorCode' in response.data) {
-        throw new Error(response.data.message);
+        throw new Error(`MIAW API Error: ${response.data.message}`);
       }
 
       return response.data as MiawSuccessResponse;
@@ -313,31 +298,16 @@ class MiawTokenManager {
     }
   }
 
-  // Clear cached token (for logout/cleanup)
+  // Clear cached tokens (for logout/session cleanup)
   public clearToken(): void {
     this.token = null;
     this.tokenExpiresAt = null;
-  }
-}
-
-// Centralized MIAW API functions for use in API routes
-export class MiawApiClient {
-  private tokenManager: MiawTokenManager;
-  private baseUrl: string;
-  private organizationId: string;
-  private developerName: string;
-  private continuationToken: string | null = null;
-
-  constructor() {
-    this.tokenManager = MiawTokenManager.getInstance();
-    this.baseUrl = process.env.MIAW_SCRT_URL || '';
-    this.organizationId = process.env.SF_ORG_ID || '';
-    this.developerName = process.env.MIAW_DEVELOPER_NAME || '';
+    this.continuationToken = null; // Clear session token too
   }
 
   // Get authenticated headers
   private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = await this.tokenManager.getToken();
+    const token = await this.getToken();
     return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
@@ -345,16 +315,18 @@ export class MiawApiClient {
   }
 
   // Generate continuation token for session continuity
-  public async generateContinuationToken():string {
+  public async generateContinuationToken(): Promise<string> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/authorization/continuation-access-token`;
 
     try {
-      const headers = this.getAuthHeaders();
-      const response: AxiosResponse<{ accessToken: string,lastEventId:string }> = await axios.get(endpoint,{
+      const headers = await this.getAuthHeaders();
+      const response: AxiosResponse<{ accessToken: string, lastEventId: string }> = await axios.get(endpoint, {
         httpsAgent,
         headers
       });
       
+      // ✅ Auto-store the continuation token for immediate use
+      this.setContinuationToken(response.data.accessToken);
       return response.data.accessToken;
     } catch (error) {
       console.error('Error generating continuation token:', error);
@@ -372,28 +344,32 @@ export class MiawApiClient {
     return this.continuationToken;
   }
 
-  // Get current access token (for backwards compatibility)
-  public async getCurrentToken(): Promise<string|undefined> {
-    return this.tokenManager.getToken();
+  // Check if user has an active session
+  public hasActiveSession(): boolean {
+    return !!this.continuationToken;
   }
 
-  // Get auth headers with continuation token
+  // Get current access token (for backwards compatibility)
+  public async getCurrentToken(): Promise<string> {
+    return this.getToken();
+  }
+
+  // Get auth headers with smart token selection
   private async getAuthHeadersWithContinuation(): Promise<Record<string, string>> {
-    if (this.continuationToken) {
-      return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.continuationToken}`
-      };
-    }
-    return this.getAuthHeaders();
+    // Prefer continuation token for session operations, fallback to access token
+    const token = this.continuationToken || await this.getToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
   }
 
   // Create conversation
   public async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation`;
-
-    const conversationId = randomUUID();
     
+    const conversationId = preChatData?.SessionId || randomUUID();
+
     const payload = {
       conversationId: conversationId,
       esDeveloperName: this.developerName,
@@ -405,9 +381,17 @@ export class MiawApiClient {
     };
 
     try {
-      const headers = await this.getAuthHeadersWithContinuation();
+      // Use access token for conversation creation (continuation token doesn't exist yet)
+      const headers = await this.getAuthHeaders();
       const response: AxiosResponse<MiawConversation> = await axios.post(endpoint, payload, { httpsAgent, headers });
-      return response.data;
+      
+      // ✅ Auto-generate continuation token for the new session
+      await this.generateContinuationToken();
+      
+      return {
+        conversationId: conversationId,
+        status: 'Active'
+      }
     } catch (error) {
       console.error('Error creating MIAW conversation:', error);
       throw new Error('Failed to create conversation');
@@ -415,7 +399,14 @@ export class MiawApiClient {
   }
 
   // Send message
-  public async sendMessage(conversationId:string, messageId:string, messageType:string, messageContent, isNewMessagingSession:boolean, language:string): Promise<MiawMessage> {
+  public async sendMessage(
+    conversationId: string, 
+    messageId: string, 
+    messageType: string, 
+    messageContent, 
+    isNewMessagingSession: boolean, 
+    language: string
+  ): Promise<MiawMessage> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/message`;
     
     const payload = {
@@ -431,7 +422,7 @@ export class MiawApiClient {
 
     try {
       // Use continuation token if available, otherwise use access token
-      const headers = await this.getAuthHeadersWithContinuation() || await this.getAuthHeaders();
+      const headers = await this.getAuthHeadersWithContinuation();
       const response: AxiosResponse<MiawMessage> = await axios.post(endpoint, payload, { httpsAgent, headers });
       return response.data;
     } catch (error) {
@@ -441,12 +432,12 @@ export class MiawApiClient {
   }
 
   // Send typing indicator
-  // Send typing indicator
-  public async sendTypingIndicator(conversationId: string, isTyping: boolean): Promise<void> {
+  public async sendTypingIndicator(conversationId: string, typingId: string): Promise<void> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entry`;
     
     const payload = {
-      typing: isTyping
+      entryType: "TypingStartedIndicator",
+      id: typingId
     };
 
     try {
@@ -460,13 +451,14 @@ export class MiawApiClient {
   }
 
   // Send acknowledgment (delivery or read receipt)
-  public async sendAcknowledgment(conversationId: string, messageId: string, acknowledgmentType: 'Delivered' | 'Read' = 'Read'): Promise<void> {
+  public async sendAcknowledgment(conversationId: string, acknowledgmentId: string, acknowledgmentType: 'Delivery' | 'Read'): Promise<void> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/acknowledge-entries`;
     
     const payload = {
-      acknowledgments: [{
-        messageId: messageId,
-        acknowledgmentType: acknowledgmentType
+      acks: [{
+        messageId: acknowledgmentId,
+        entryType: acknowledgmentType,
+        conversationEntryId: conversationId
       }]
     };
 
@@ -483,7 +475,7 @@ export class MiawApiClient {
   // Get SSE events stream URL with authentication token
   public async getEventsStreamUrl(conversationId: string): Promise<string> {
     // Use continuation token if available, otherwise use access token
-    const token = this.continuationToken || await this.tokenManager.getToken();
+    const token = this.continuationToken || await this.getToken();
     return `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/events?access_token=${token}`;
   }
 
@@ -531,111 +523,17 @@ export class MiawApiClient {
 
   // Close conversation
   public async closeConversation(conversationId: string): Promise<void> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/session`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}?esDeveloperName=${this.developerName}`;
 
     try {
       const headers = await this.getAuthHeaders();
-      await axios.delete(endpoint, { httpsAgent, headers });
+      await axios.delete(endpoint, { httpsAgent, headers: {'Authorization': headers['Authorization']} });
+
+      // ✅ Clear continuation token when session ends
+      this.continuationToken = null;
     } catch (error) {
       console.error('Error closing conversation:', error);
       throw new Error('Failed to close conversation');
     }
   }
 }
-
-// Legacy class for backward compatibility (if needed)
-export class MiawApiService {
-  private apiClient: MiawApiClient;
-  private conversationId: string | null = null;
-  private eventSource: EventSource | null = null;
-
-  constructor() {
-    this.apiClient = new MiawApiClient();
-  }
-
-  // Legacy methods that delegate to the new API client
-  async generateAccessToken(): Promise<string|undefined> {
-    const accessToken = await this.apiClient.getCurrentToken();
-    return accessToken;
-      }
-
-  async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
-    const conversation = await this.apiClient.createConversation(preChatData);
-    this.conversationId = conversation.conversationId;
-    return conversation;
-  }
-
-  async sendMessage(text: string): Promise<MiawMessage> {
-    if (!this.conversationId) {
-      throw new Error('No active conversation. Please start a conversation first.');
-    }
-    return await this.apiClient.sendMessage(
-      this.conversationId,
-      text,
-      randomUUID(),
-      '',
-      false,
-      { jobApplicationNumber: 'JAR-0001' },
-      'en_US'
-    );
-  }
-
-  async sendTypingIndicator(isTyping: boolean): Promise<void> {
-    if (!this.conversationId) {
-      throw new Error('No active conversation. Please start a conversation first.');
-    }
-    await this.apiClient.sendTypingIndicator(this.conversationId, isTyping);
-  }
-
-  async sendDeliveryAcknowledgement(messageId: string): Promise<void> {
-    if (!this.conversationId) {
-      throw new Error('No active conversation. Please start a conversation first.');
-    }
-    await this.apiClient.sendAcknowledgment(this.conversationId, messageId, 'Delivered');
-  }
-
-  async sendReadReceipt(messageId: string): Promise<void> {
-    if (!this.conversationId) {
-      throw new Error('No active conversation. Please start a conversation first.');
-    }
-    await this.apiClient.sendAcknowledgment(this.conversationId, messageId, 'Read');
-  }
-
-  async closeConversation(): Promise<void> {
-    if (!this.conversationId) {
-      throw new Error('No active conversation. Please start a conversation first.');
-    }
-    
-    await this.apiClient.closeConversation(this.conversationId);
-    this.conversationId = null;
-    
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-  }
-
-  // Getters
-  get isAuthenticated(): boolean {
-    return true; // Will be true if token manager can get a token
-  }
-
-  get hasActiveConversation(): boolean {
-    return !!this.conversationId;
-  }
-
-  get currentConversationId(): string | null {
-    return this.conversationId;
-  }
-
-  // Cleanup method
-  cleanup(): void {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-    this.conversationId = null;
-  }
-}
-
-export default MiawApiService;
