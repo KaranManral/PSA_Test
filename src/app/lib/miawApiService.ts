@@ -174,17 +174,12 @@ export interface ConversationEntryList {
   nextOffset?: string;
 }
 
-export interface ConversationTranscript {
-  conversationId: string;
-  transcript: string;
-  timestamp: string;
-}
-
 export type MiawTokenResponse = MiawSuccessResponse | MiawErrorResponse;
 
 export interface MiawConversation {
   conversationId: string;
   status: 'Active' | 'Routing' | 'Closed';
+  httpStatus?: number;
 }
 
 export interface MiawMessage {
@@ -303,6 +298,13 @@ export class MiawApiClient {
     this.token = null;
     this.tokenExpiresAt = null;
     this.continuationToken = null; // Clear session token too
+    console.log('All MIAW tokens cleared');
+  }
+
+  // Emergency cleanup method (only use when conversation closure fails multiple times)
+  public forceCleanup(): void {
+    console.warn('⚠️ Force cleanup initiated - clearing all tokens without conversation closure');
+    this.clearToken();
   }
 
   // Get authenticated headers
@@ -331,6 +333,15 @@ export class MiawApiClient {
     } catch (error) {
       console.error('Error generating continuation token:', error);
       throw new Error('Failed to generate continuation token');
+    }
+  }
+
+  // Ensure we have a continuation token before session-scoped operations
+  private async ensureContinuationToken(): Promise<void> {
+    if (this.continuationToken) return;
+    await this.generateContinuationToken();
+    if (!this.continuationToken) {
+      throw new Error('No continuation token available. Please start a session first.');
     }
   }
 
@@ -364,6 +375,12 @@ export class MiawApiClient {
     };
   }
 
+  // Get ONLY Authorization header (no Content-Type) with continuation fallback
+  private async getAuthOnlyHeaderWithContinuation(): Promise<Record<string, string>> {
+    const token = this.continuationToken || await this.getToken();
+    return { 'Authorization': `Bearer ${token}` };
+  }
+
   // Create conversation
   public async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation`;
@@ -390,7 +407,8 @@ export class MiawApiClient {
       
       return {
         conversationId: conversationId,
-        status: 'Active'
+        status: 'Active',
+        httpStatus: response.status
       }
     } catch (error) {
       console.error('Error creating MIAW conversation:', error);
@@ -421,32 +439,14 @@ export class MiawApiClient {
     };
 
     try {
-      // Use continuation token if available, otherwise use access token
+      // Messages require a continuation token (no fallback to access token)
+      await this.ensureContinuationToken();
       const headers = await this.getAuthHeadersWithContinuation();
       const response: AxiosResponse<MiawMessage> = await axios.post(endpoint, payload, { httpsAgent, headers });
       return response.data;
     } catch (error) {
       console.error('Error sending MIAW message:', error);
       throw new Error('Failed to send message');
-    }
-  }
-
-  // Send typing indicator
-  public async sendTypingIndicator(conversationId: string, typingId: string): Promise<void> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entry`;
-    
-    const payload = {
-      entryType: "TypingStartedIndicator",
-      id: typingId
-    };
-
-    try {
-      // Use continuation token if available, otherwise use access token
-      const headers = await this.getAuthHeadersWithContinuation();
-      await axios.post(endpoint, payload, { httpsAgent, headers });
-    } catch (error) {
-      console.error('Error sending typing indicator:', error);
-      throw new Error('Failed to send typing indicator');
     }
   }
 
@@ -463,7 +463,7 @@ export class MiawApiClient {
     };
 
     try {
-      // Use continuation token if available, otherwise use access token
+      await this.ensureContinuationToken();
       const headers = await this.getAuthHeadersWithContinuation();
       await axios.post(endpoint, payload, { httpsAgent, headers });
     } catch (error) {
@@ -474,8 +474,8 @@ export class MiawApiClient {
 
   // Get SSE events stream URL with authentication token
   public async getEventsStreamUrl(conversationId: string): Promise<string> {
-    // Use continuation token if available, otherwise use access token
-    const token = this.continuationToken || await this.getToken();
+    await this.ensureContinuationToken();
+    const token = this.continuationToken as string;
     return `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/events?access_token=${token}`;
   }
 
@@ -484,6 +484,7 @@ export class MiawApiClient {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/list`;
 
     try {
+      await this.ensureContinuationToken();
       const headers = await this.getAuthHeadersWithContinuation();
       const response: AxiosResponse<ConversationList> = await axios.get(endpoint, { httpsAgent, headers });
       return response.data;
@@ -498,6 +499,7 @@ export class MiawApiClient {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entries`;
 
     try {
+      await this.ensureContinuationToken();
       const headers = await this.getAuthHeadersWithContinuation();
       const response: AxiosResponse<ConversationEntryList> = await axios.get(endpoint, { httpsAgent, headers });
       return response.data;
@@ -508,12 +510,13 @@ export class MiawApiClient {
   }
 
   // Retrieve conversation transcript
-  public async getConversationTranscript(conversationId: string): Promise<ConversationTranscript> {
+  public async getConversationTranscript(conversationId: string) {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/transcript`;
 
     try {
+      await this.ensureContinuationToken();
       const headers = await this.getAuthHeadersWithContinuation();
-      const response: AxiosResponse<ConversationTranscript> = await axios.get(endpoint, { httpsAgent, headers });
+      const response: AxiosResponse<any> = await axios.get(endpoint, { httpsAgent, headers });
       return response.data;
     } catch (error) {
       console.error('Error retrieving conversation transcript:', error);
@@ -521,19 +524,55 @@ export class MiawApiClient {
     }
   }
 
-  // Close conversation
+  // Close entire conversation (not just session)
   public async closeConversation(conversationId: string): Promise<void> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}?esDeveloperName=${this.developerName}`;
 
     try {
-      const headers = await this.getAuthHeaders();
-      await axios.delete(endpoint, { httpsAgent, headers: {'Authorization': headers['Authorization']} });
+      // Ensure we have a valid continuation token for this conversation
+      await this.ensureContinuationToken();
+      // Use ONLY Authorization header (no Content-Type), and no body
+      const headers = await this.getAuthOnlyHeaderWithContinuation();
+      await axios.delete(endpoint, { httpsAgent, headers });
 
-      // ✅ Clear continuation token when session ends
-      this.continuationToken = null;
+      console.log(`Conversation ${conversationId} closed successfully`);
     } catch (error) {
       console.error('Error closing conversation:', error);
+      
+      // Provide more detailed error information
+      if (axios.isAxiosError(error)) {
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', error.response?.data);
+        throw new Error(`Failed to close conversation: ${error.response?.status} ${error.response?.statusText}`);
+      }
+      
       throw new Error('Failed to close conversation');
+    }
+  }
+
+  // End session only (for session management)
+  public async endSession(conversationId: string): Promise<void> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/session?esDeveloperName=${this.developerName}`;
+
+    try {
+      // Ensure we have a valid continuation token for this conversation
+      await this.ensureContinuationToken();
+      // Use ONLY Authorization header (no Content-Type), and no body
+      const headers = await this.getAuthOnlyHeaderWithContinuation();
+      await axios.delete(endpoint, { httpsAgent, headers });
+
+      console.log(`Session for conversation ${conversationId} ended successfully`);
+    } catch (error) {
+      console.error('Error ending session:', error);
+      
+      // Provide more detailed error information
+      if (axios.isAxiosError(error)) {
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', error.response?.data);
+        throw new Error(`Failed to end session: ${error.response?.status} ${error.response?.statusText}`);
+      }
+      
+      throw new Error('Failed to end session');
     }
   }
 }

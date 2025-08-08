@@ -1,6 +1,5 @@
 /*
   This API route handles sending messages using the MIAW (Messaging for In-App and Web) API.
-  It includes typing indicators and message acknowledgments.
   Uses centralized authentication from MiawApiClient.
 */
 
@@ -10,7 +9,7 @@ import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { msg, typingIndicator } = body;
+  const { msg} = body;
 
   // Validate message length (2000 character limit)
   if (msg && msg.length > 2000) {
@@ -57,16 +56,6 @@ export async function POST(req: NextRequest) {
     // Set continuation token if available for session-based operations
     if (continuationToken) {
       miawClient.setContinuationToken(continuationToken);
-    }
-
-    // Handle typing indicator if requested
-    if (typingIndicator !== undefined) {
-      await miawClient.sendTypingIndicator(conversationId, randomUUID());
-
-      // If only typing indicator, return success
-      if (!msg) {
-        return NextResponse.json({ message: "success", data: [] }, { status: 200 });
-      }
     }
 
     // Send the actual message

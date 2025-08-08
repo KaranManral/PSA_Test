@@ -39,28 +39,21 @@ export async function POST(req: NextRequest) {
     };
 
     // Create conversation (this will auto-generate continuation token)
-    const conversationData = await miawClient.createConversation(preChatData);
+  const conversationData = await miawClient.createConversation(preChatData);
 
-    // Get tokens for response
-    const accessToken = await miawClient.getCurrentToken();
-    const continuationToken = miawClient.getContinuationToken();
 
     // Prepare the session object to store in a cookie
+    const isSuccess = conversationData.httpStatus === 201;
     const session = {
-      status: "success",
-      accessToken: accessToken,
-      continuationToken: continuationToken,
+      status: isSuccess ? "success" : "failed",
       conversationId: conversationData.conversationId,
-      messages: [
-        {
-          id: `bot-welcome-${Date.now()}`,
-          message: "Hello! I'm your Adecco Pre-Screening Assistant. I'll help you with your job application screening process. How can I assist you today?",
-          type: "bot",
-          timestamp: new Date().toISOString()
-        }
-      ],
       isAuthenticated: conversationData.status === 'Active'
     };
+
+    // If creation didn't return 201, treat as failure
+    if (!isSuccess) {
+      return NextResponse.json({ message: "Session creation failed", sessionId: "" }, { status: 500 });
+    }
 
     // Set the session cookie and return the session info
     const response = NextResponse.json(session, { status: 200 });
