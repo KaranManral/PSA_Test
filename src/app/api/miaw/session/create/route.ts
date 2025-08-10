@@ -16,14 +16,14 @@ export async function POST(req: NextRequest) {
   // Validate required parameters
   if (!jobApplicationNumber) {
     return NextResponse.json(
-      { message: "Job application number is required", sessionId: "" },
+      { message: "Job application number is required", conversationId: "" },
       { status: 400 }
     );
   }
 
   if (!termsAndConditionAgreed) {
     return NextResponse.json(
-      { message: "Terms and conditions must be accepted", sessionId: "" },
+      { message: "Terms and conditions must be accepted", conversationId: "" },
       { status: 400 }
     );
   }
@@ -45,14 +45,14 @@ export async function POST(req: NextRequest) {
     // Prepare the session object to store in a cookie
     const isSuccess = conversationData.httpStatus === 201;
     const session = {
-      status: isSuccess ? "success" : "failed",
+      message: isSuccess ? "success" : "failed",
       conversationId: conversationData.conversationId,
       isAuthenticated: conversationData.status === 'Active'
     };
 
     // If creation didn't return 201, treat as failure
     if (!isSuccess) {
-      return NextResponse.json({ message: "Session creation failed", sessionId: "" }, { status: 500 });
+      return NextResponse.json({ message: "Session creation failed", conversationId: "" }, { status: 500 });
     }
 
     // Set the session cookie and return the session info
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error creating MIAW session:", error);
     return NextResponse.json(
-      { message: "Session creation failed", sessionId: "", error: error instanceof Error ? error.message : "Unknown error" },
+      { message: "Session creation failed", conversationId: "", error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

@@ -384,7 +384,6 @@ export class MiawApiClient {
 
   // Create conversation
   public async createConversation(preChatData?: MiawPreChatData): Promise<MiawConversation> {
-    await this.subscribeEvents();
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation`;
     
     const conversationId = preChatData?.SessionId || randomUUID();
@@ -509,78 +508,13 @@ export class MiawApiClient {
 
     const response = await axios.get(sseEndpoint, { headers, httpsAgent, data, responseType: 'stream' });
 
-    // Create a new ReadableStream to process and forward SSE events
-    const stream = new ReadableStream({
-      start(controller) {
-        let buffer = '';
-        
-        // Handle incoming data chunks
-        response.data.on('data', (chunk: Buffer) => {
-          buffer += chunk.toString();
-          
-          // Process complete SSE events (ending with \n\n)
-          const events = buffer.split('\n\n');
-          buffer = events.pop() || ''; // Keep incomplete event in buffer
-          
-          for (const eventData of events) {
-            if (eventData.trim()) {
-              // Parse SSE event
-              const lines = eventData.split('\n');
-              const event: any = {};
-              
-              for (const line of lines) {
-                if (line.startsWith('event:')) {
-                  event.type = line.substring(6).trim();
-                } else if (line.startsWith('data:')) {
-                  event.data = line.substring(5).trim();
-                } else if (line.startsWith('id:')) {
-                  event.id = line.substring(3).trim();
-                }
-              }
-              
-              // Log the parsed event
-              console.log('SSE Event:', event);
-              
-              // Handle different event types
-              if (event.type === 'ping') {
-                console.log('Received ping event, connection alive');
-              } else if (event.type === 'CONVERSATION_MESSAGE') {
-                console.log('New message received:', event.data);
-              } else if (event.type === 'CONVERSATION_ROUTING_RESULT') {
-                console.log('Routing result:', event.data);
-              } else if (event.type === 'CONVERSATION_PARTICIPANT_CHANGED') {
-                console.log('Participant changed:', event.data);
-              } else if (event.type === 'CONVERSATION_DELIVERY_ACKNOWLEDGEMENT') {
-                console.log('Delivery acknowledgement:', event.data);
-              } else if (event.type === 'CONVERSATION_READ_ACKNOWLEDGEMENT') {
-                console.log('Read acknowledgement:', event.data);
-              } else if (event.type === 'CONVERSATION_TYPING_STARTED_INDICATOR') {
-                console.log('Typing started:', event.data);
-              } else if (event.type === 'CONVERSATION_TYPING_STOPPED_INDICATOR') {
-                console.log('Typing stopped:', event.data);
-              } else if (event.type === 'CONVERSATION_CLOSE_CONVERSATION') {
-                console.log('Conversation closed:', event.data);
-              } else if (event.type === 'CONVERSATION_ERROR') {
-                console.log('Conversation error:', event.data);
-              }
-              
-              // Forward the event to the client
-              controller.enqueue(new TextEncoder().encode(`${eventData}\n\n`));
-            }
-          }
-        });
-        
-        response.data.on('end', () => {
-          console.log('SSE stream ended');
-          controller.close();
-        });
-        
-        response.data.on('error', (error: Error) => {
-          console.error('SSE stream error:', error);
-          controller.error(error);
-        });
+    return new Response(response.data, { 
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Org-Id': this.organizationId
       }
-    });
+     });
   }
 
   // Retrieve conversation transcript

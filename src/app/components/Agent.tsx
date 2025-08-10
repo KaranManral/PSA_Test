@@ -5,10 +5,23 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Loader2, MoreVertical } from "lucide-react";
 
+// Browser-compatible UUID generation function
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 // Message interface defines the structure of each chat message
 interface Message {
   id: string;
-  type: "user" | "bot";
+  type: "EndUser" | "Chatbot";
   content: string;
   timestamp: Date;
   isDelivered?: boolean;
@@ -58,6 +71,9 @@ export default function ChatBot({
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track processed message IDs to prevent duplicates
+  const processedMessageIds = useRef<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -94,39 +110,119 @@ export default function ChatBot({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth",block: "end", inline: "nearest" });
   };
 
-  // Setup Server-Sent Events for real-time messaging
-  const setupEventSource = (): void => {
+  // Setup Server-Sent Events for real-time messaging using fetch with stream processing
+  const setupEventSource = async (): Promise<void> => {
     try {
-      eventSourceRef.current = new EventSource('/api/agent/miaw/events');
+      const response = await fetch('/api/miaw/events');
       
-      eventSourceRef.current.onopen = () => {
-        console.log('SSE connection established');
-        setIsConnected(true);
-      };
+      if (!response.ok) {
+        throw new Error(`SSE fetch failed: ${response.status}`);
+      }
 
-      eventSourceRef.current.onmessage = (event) => {
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      console.log('SSE connection established');
+      setIsConnected(true);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Process SSE stream
+      const processStream = async () => {
         try {
-          const miawEvent: MiawEvent = JSON.parse(event.data);
-          handleMiawEvent(miawEvent);
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log('SSE stream ended');
+              setIsConnected(false);
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete SSE events (ending with \n\n)
+            const events = buffer.split('\n\n');
+            buffer = events.pop() || ''; // Keep incomplete event in buffer
+            
+            for (const eventData of events) {
+              if (eventData.trim()) {
+                // Parse SSE event
+                const lines = eventData.split('\n');
+                const event: any = {};
+                
+                for (const line of lines) {
+                  if (line.startsWith('event:')) {
+                    event.type = line.substring(6).trim();
+                  } else if (line.startsWith('data:')) {
+                    event.data = line.substring(5).trim();
+                  } else if (line.startsWith('id:')) {
+                    event.id = line.substring(3).trim();
+                  }
+                }
+                
+                // Log the parsed event
+                console.log('SSE Event:', event);
+                
+                // Route all events through the main event handler to avoid duplicates
+                try {
+                  let eventData = {};
+                  if (event.data) {
+                    eventData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                  }
+                  
+                  // Special handling for typing indicators (no need to parse data)
+                  if (event.type === 'CONVERSATION_TYPING_STARTED_INDICATOR') {
+                    console.log('Typing started:', event.data);
+                    setAgentTyping(true);
+                  } else if (event.type === 'CONVERSATION_TYPING_STOPPED_INDICATOR') {
+                    console.log('Typing stopped:', event.data);
+                    setAgentTyping(false);
+                  } else if (event.type === 'ping') {
+                    console.log('Received ping event, connection alive');
+                  } else {
+                    // Route all other events through the main handler
+                    handleMiawEvent({ 
+                      type: event.type, 
+                      eventType: event.type, 
+                      data: eventData, 
+                      timestamp: new Date().toISOString() 
+                    });
+                  }
+                } catch (parseError) {
+                  console.error('Error processing event:', event.type, parseError);
+                }
+              }
+            }
+          }
         } catch (error) {
-          console.error('Error parsing SSE event:', error);
+          console.error('Error processing SSE stream:', error);
+          setIsConnected(false);
+          
+          // Attempt to reconnect after 5 seconds
+          setTimeout(() => {
+            if (isSessionActive) {
+              setupEventSource();
+            }
+          }, 5000);
         }
       };
 
-      eventSourceRef.current.onerror = (error) => {
-        console.error('SSE connection error:', error);
-        setIsConnected(false);
-        
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-          if (isSessionActive) {
-            setupEventSource();
-          }
-        }, 5000);
-      };
+      processStream();
+      
     } catch (error) {
       console.error('Error setting up SSE:', error);
       setIsConnected(false);
+      
+      // Attempt to reconnect after 5 seconds
+      setTimeout(() => {
+        if (isSessionActive) {
+          setupEventSource();
+        }
+      }, 5000);
     }
   };
 
@@ -142,14 +238,15 @@ export default function ChatBot({
       case 'CONVERSATION_TYPING_STOPPED_INDICATOR':
         setAgentTyping(false);
         break;
-      case 'CONVERSATION_DELIVERY_ACKNOWLEDGEMENT':
-        handleDeliveryAcknowledgement(event.data);
-        break;
-      case 'CONVERSATION_READ_ACKNOWLEDGEMENT':
-        handleReadAcknowledgement(event.data);
-        break;
+      // case 'CONVERSATION_DELIVERY_ACKNOWLEDGEMENT':
+      //   handleDeliveryAcknowledgement(event.data);
+      //   break;
+      // case 'CONVERSATION_READ_ACKNOWLEDGEMENT':
+      //   handleReadAcknowledgement(event.data);
+      //   break;
       case 'CONVERSATION_CLOSE_CONVERSATION':
-        handleConversationClosed();
+        console.log('Conversation closed by agent');
+        handleCloseSession();
         break;
       case 'CONVERSATION_ROUTING_RESULT':
         // Handle routing events if needed
@@ -164,55 +261,92 @@ export default function ChatBot({
   };
 
   // Handle incoming messages from agent
-  const handleIncomingMessage = (data: any): void => {
-    if (data.message && data.message.staticContent) {
-      const botMessage: Message = {
-        id: `bot-${Date.now()}`,
-        type: "bot",
-        content: data.message.staticContent.text,
-        timestamp: new Date(),
-        messageId: data.message.id
-      };
-      
-      setMessages((prev) => [...prev, botMessage]);
-      
-      // Send delivery acknowledgement
-      sendAcknowledgement(data.message.id, 'Delivered');
+  const handleIncomingMessage = async (data: any): Promise<void> => {
+    console.log('Processing incoming message:', data);
+// {
+//       channelPlatformKey: data.conversationEntry.channelPlatformKey,
+//       channelType: data.conversationEntry.channelType,
+//       sender: data.conversationEntry.sender.role,
+//       senderDisplayName: data.conversationEntry.senderDisplayName,
+//     };
+    if (data && data.conversationEntry && data.conversationEntry.entryPayload) {
+      const message = await JSON.parse(data.conversationEntry.entryPayload);
+
+      const messageId = message.id;
+      const messageContent = message.abstractMessage.staticContent.text;
+      const sender = data.conversationEntry.sender.role;
+
+      // Only process messages from agents/bots, skip user messages
+      if (sender === 'EndUser') {
+        console.log('Skipping user message (already added locally):', messageId);
+        return;
+      }
+
+      if (messageId && messageContent) {
+        // Check if we've already processed this message
+        if (processedMessageIds.current.has(messageId)) {
+          console.log('Message already processed, skipping duplicate:', messageId);
+          return;
+        }
+        
+        // Mark message as processed
+        processedMessageIds.current.add(messageId);
+        
+        // Generate a unique UI ID to prevent React key conflicts
+        const uiMessageId = `${messageId}-${Date.now()}`;
+        
+        const botMessage: Message = {
+          id: uiMessageId,  // Use unique UI ID for React key
+          type: sender,
+          content: messageContent,
+          timestamp: new Date(),
+          messageId: messageId  // Keep original message ID for acknowledgments
+        };
+
+        console.log("Adding bot message to chat:", botMessage);
+
+        setMessages((prev) => [...prev, botMessage]);
+
+        // // Send delivery acknowledgement immediately
+        // sendDeliveryAcknowledgement(messageId);
+
+        // // Send read acknowledgement for the last message after a short delay
+        // setTimeout(() => {
+        //   sendReadAcknowledgement(messageId);
+        // }, 1000);
+      } else {
+        console.warn("Could not extract message content from data:", data);
+      }
+    } else {
+      console.warn("Invalid Data:", data);
     }
   };
 
-  // Handle delivery acknowledgements
-  const handleDeliveryAcknowledgement = (data: any): void => {
-    if (data.messageId) {
-      setMessages((prev) => 
-        prev.map(msg => 
-          msg.messageId === data.messageId 
-            ? { ...msg, isDelivered: true }
-            : msg
-        )
-      );
-    }
-  };
+  // // Handle delivery acknowledgements
+  // const handleDeliveryAcknowledgement = (data: any): void => {
+  //   if (data.messageId) {
+  //     setMessages((prev) => 
+  //       prev.map(msg => 
+  //         msg.messageId === data.messageId 
+  //           ? { ...msg, isDelivered: true }
+  //           : msg
+  //       )
+  //     );
+  //   }
+  // };
 
-  // Handle read acknowledgements
-  const handleReadAcknowledgement = (data: any): void => {
-    if (data.messageId) {
-      setMessages((prev) => 
-        prev.map(msg => 
-          msg.messageId === data.messageId 
-            ? { ...msg, isRead: true }
-            : msg
-        )
-      );
-    }
-  };
-
-  // Handle conversation closed
-  const handleConversationClosed = (): void => {
-    showToast('Conversation has been closed by the agent', 'error');
-    setIsSessionActive(false);
-    cleanupEventSource();
-  };
+  // // Handle read acknowledgements
+  // const handleReadAcknowledgement = (data: any): void => {
+  //   if (data.messageId) {
+  //     setMessages((prev) => 
+  //       prev.map(msg => 
+  //         msg.messageId === data.messageId 
+  //           ? { ...msg, isRead: true }
+  //           : msg
+  //       )
+  //     );
+  //   }
+  // };
 
   // Cleanup event source
   const cleanupEventSource = (): void => {
@@ -223,68 +357,93 @@ export default function ChatBot({
     setIsConnected(false);
   };
 
-  // Send acknowledgement (delivery or read receipt)
-  const sendAcknowledgement = async (messageId: string, type: 'Delivered' | 'Read'): Promise<void> => {
-    try {
-      await fetch('/api/agent/miaw/acknowledgment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messageId,
-          acknowledgmentType: type
-        }),
-      });
-    } catch (error) {
-      console.error(`Error sending ${type} acknowledgement:`, error);
-    }
-  };
+  // // Send delivery acknowledgement
+  // const sendDeliveryAcknowledgement = async (messageId: string): Promise<void> => {
+  //   try {
+  //     await fetch('/api/miaw/acknowledgment/delivery', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         conversationEntryId: messageId
+  //       }),
+  //     });
+  //   } catch (error) {
+  //     console.error('Error sending delivery acknowledgement:', error);
+  //   }
+  // };
 
-  // Send typing indicator
-  const sendTypingIndicator = async (isTyping: boolean): Promise<void> => {
-    try {
-      await fetch('/api/agent/miaw/message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          typingIndicator: isTyping
-        }),
-      });
-    } catch (error) {
-      console.error('Error sending typing indicator:', error);
-    }
-  };
+  // // Send read acknowledgement
+  // const sendReadAcknowledgement = async (messageId: string): Promise<void> => {
+  //   try {
+  //     await fetch('/api/miaw/acknowledgment/read', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         conversationEntryId: messageId
+  //       }),
+  //     });
+  //   } catch (error) {
+  //     console.error('Error sending read acknowledgement:', error);
+  //   }
+  // };
 
-  // Handle typing indicator with debouncing
-  const handleTypingIndicator = (typing: boolean): void => {
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+  // // Send started typing indicator
+  // const sendStartedTypingIndicator = async (): Promise<void> => {
+  //   try {
+  //     const path = '/api/miaw/typing/started';
+  //     await fetch(path, { method: 'POST' });
+  //   } catch (error) {
+  //     console.error('Error sending started typing indicator:', error);
+  //   }
+  // };
 
-    if (typing) {
-      setIsTyping(true);
-      sendTypingIndicator(true);
+  // // Send stopped typing indicator
+  // const sendStoppedTypingIndicator = async (): Promise<void> => {
+  //   try {
+  //     const path = '/api/miaw/typing/stopped';
+  //     await fetch(path, { method: 'POST' });
+  //   } catch (error) {
+  //     console.error('Error sending stopped typing indicator:', error);
+  //   }
+  // };
+
+  // // Handle typing indicator with debouncing to avoid too many requests
+  // const handleTypingIndicator = (typing: boolean): void => {
+  //   if (typingTimeoutRef.current) {
+  //     clearTimeout(typingTimeoutRef.current);
+  //   }
+
+  //   if (typing) {
+  //     // Only send typing start if not already typing
+  //     if (!isTyping) {
+  //       setIsTyping(true);
+  //       sendStartedTypingIndicator();
+  //     }
       
-      // Stop typing indicator after 3 seconds of inactivity
-      typingTimeoutRef.current = setTimeout(() => {
-        setIsTyping(false);
-        sendTypingIndicator(false);
-      }, 3000);
-    } else {
-      setIsTyping(false);
-      sendTypingIndicator(false);
-    }
-  };
+  //     // Stop typing indicator after 3 seconds of inactivity
+  //     typingTimeoutRef.current = setTimeout(() => {
+  //       setIsTyping(false);
+  //       sendStoppedTypingIndicator();
+  //     }, 3000);
+  //   } else {
+  //     // Send stop immediately if user clears input or sends message
+  //     if (isTyping) {
+  //       setIsTyping(false);
+  //       sendStoppedTypingIndicator();
+  //     }
+  //   }
+  // };
 
   // Starts a new chat session with the MIAW API
   const handleStartSession = async (): Promise<void> => {
     setIsCreatingSession(true);
 
     try {
-      const response = await fetch("/api/agent/miaw/session/create", {
+  const response = await fetch("/api/miaw/session/create", {
         method: "POST",
         body: JSON.stringify({
           jobApplicationNumber: jobApplicationNumber,
@@ -313,18 +472,9 @@ export default function ChatBot({
 
       const data = await response.json();
 
-      if (data.status === "success" && data.messages.length > 0) {
-        const botResponseContent: string = data.messages[0].message;
-        const responseLines = botResponseContent.split('\n').filter(line => line.trim() !== '');
-
-        const newBotMessages: Message[] = responseLines.map((line, index) => ({
-          id: `bot-initial-${Date.now()}-${index}`,
-          type: 'bot',
-          content: line,
-          timestamp: new Date(),
-        }));
-
-        setMessages(newBotMessages);
+      if (data.message === "success" && data.conversationId ) {
+        // Clear processed message IDs for new session
+        processedMessageIds.current.clear();
         setIsSessionActive(true);
       } else {
         throw new Error("Failed to start session: Invalid response format.");
@@ -348,9 +498,11 @@ export default function ChatBot({
       return;
     }
 
+    const messageId = generateUUID();
+
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      type: "user",
+      id: messageId,
+      type: "EndUser",
       content: trimmedInput,
       timestamp: new Date(),
     };
@@ -359,16 +511,17 @@ export default function ChatBot({
     setInputValue("");
     setIsSending(true);
     
-    // Stop typing indicator
-    handleTypingIndicator(false);
+    // // Stop typing indicator
+    // handleTypingIndicator(false);
 
     try {
-      const response = await fetch("/api/agent/miaw/message", {
+  const response = await fetch("/api/miaw/message", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          messageId: messageId,
           msg: trimmedInput
         }),
       });
@@ -382,7 +535,7 @@ export default function ChatBot({
       if (data.message === "success") {
         // Message sent successfully - response will come via SSE
         console.log('Message sent successfully');
-      } else if (data.message === "error" && data.error === "Message too long") {
+      } else if (data.message === "Error: Message too long") {
         showToast("Message is too long. Please shorten your message and try again.", 'error');
       } else {
         throw new Error("Invalid response from message API.");
@@ -392,8 +545,8 @@ export default function ChatBot({
       showToast("Failed to send message. Please try again.", 'error');
 
       const errorMessage: Message = {
-        id: `bot-error-${Date.now()}`,
-        type: "bot",
+        id: generateUUID(),
+        type: "Chatbot",
         content: "I'm sorry, I encountered an error. Please try again.",
         timestamp: new Date(),
       };
@@ -409,7 +562,7 @@ export default function ChatBot({
   const handleCloseSession = async (): Promise<void> => {
     setIsClosingSession(true);
     try {
-      const response = await fetch("/api/agent/miaw/session/delete", {
+  const response = await fetch("/api/miaw/session/delete", {
         method: "DELETE",
       });
 
@@ -417,14 +570,15 @@ export default function ChatBot({
         throw new Error(`API Error: ${response.status}`);
       }
 
-      const data = await response.json();
-
-      if (data.message === "success") {
+      if (response.status === 200) {
+        showToast('Conversation has been closed', 'error');
         // Reset the chat state to the initial screen
         setMessages([]);
         setInputValue("");
         setIsSessionActive(false);
         setTermsAccepted(false);
+        // Clear processed message IDs
+        processedMessageIds.current.clear();
         cleanupEventSource();
       } else {
         throw new Error("Failed to close session.");
@@ -461,27 +615,13 @@ export default function ChatBot({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
     setInputValue(textarea.value);
 
-    // Handle typing indicator
-    if (textarea.value.trim()) {
-      handleTypingIndicator(true);
-    } else {
-      handleTypingIndicator(false);
-    }
+    // // Handle typing indicator
+    // if (textarea.value.trim()) {
+    //   handleTypingIndicator(true);
+    // } else {
+    //   handleTypingIndicator(false);
+    // }
   };
-
-  // Send read receipts for bot messages when they come into view
-  useEffect(() => {
-    const botMessages = messages.filter(msg => msg.type === 'bot' && msg.messageId && !msg.isRead);
-    
-    botMessages.forEach(msg => {
-      if (msg.messageId) {
-        // Send read receipt with a small delay to simulate reading
-        setTimeout(() => {
-          sendAcknowledgement(msg.messageId!, 'Read');
-        }, 1000);
-      }
-    });
-  }, [messages]);
 
   return (
     <div className="h-[75vh] bg-gray-100 relative">
@@ -491,15 +631,6 @@ export default function ChatBot({
           toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'
         }`}>
           {toast.message}
-        </div>
-      )}
-
-      {/* Connection Status Indicator */}
-      {isSessionActive && (
-        <div className={`fixed top-4 left-4 z-40 px-3 py-1 rounded-full text-xs font-medium ${
-          isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-        }`}>
-          {isConnected ? '● Connected' : '● Reconnecting...'}
         </div>
       )}
 
@@ -566,6 +697,15 @@ export default function ChatBot({
           <div className="h-[65vh] flex-1 max-w-4xl mx-auto w-full bg-white flex flex-col my-6 shadow-lg rounded-b-xl">
             {/* Chat Header */}
             <div className="bg-black text-white text-center py-4 rounded-t-xl relative">
+              {/* Connection Status in Header */}
+              <div className="absolute top-2 right-2">
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  isConnected ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                  {isConnected ? '● Connected' : '● Reconnecting...'}
+                </div>
+              </div>
+              
               <div className="max-w-4xl mx-auto px-4 flex items-center justify-between">
                 {/* Menu Icon */}
                 <div className="relative">
@@ -624,12 +764,12 @@ export default function ChatBot({
               <div className="space-y-4">
                 {messages.map((message, index) => {
                   // Check if this is the last bot message in a sequence
-                  const isLastBotInSequence = message.type === "bot" && 
-                    (index === messages.length - 1 || messages[index + 1]?.type !== "bot");
+                  const isLastBotInSequence = message.type === "Chatbot" && 
+                    (index === messages.length - 1 || messages[index + 1]?.type !== "Chatbot");
                   
                   return (
                     <div key={message.id} className="animate-fade-in">
-                      {message.type === "bot" && (
+                      {message.type === "Chatbot" && (
                         <div className="flex items-start space-x-3">
                           {isLastBotInSequence ? (
                             <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs">
@@ -654,7 +794,7 @@ export default function ChatBot({
                         </div>
                       )}
 
-                      {message.type === "user" && (
+                      {message.type === "EndUser" && (
                         <div className="flex flex-col items-end justify-end">
                           <div className="bg-red-600 text-white rounded-lg p-4 max-w-2xl">
                             <p className="whitespace-pre-wrap">
@@ -672,7 +812,7 @@ export default function ChatBot({
                   );
                 })}
 
-                {(agentTyping || isTyping) && (
+                {(agentTyping) && (
                   <div className="flex items-start space-x-3 animate-fade-in">
                     <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs">
                       AA

@@ -9,12 +9,20 @@ import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { msg} = body;
+  const { messageId, msg } = body;
 
+  // Validate message length (2000 character limit)
+  if (!messageId) {
+    return NextResponse.json(
+      { message: "Error: Message ID is required", data: [] },
+      { status: 400 }
+    );
+  }
+  
   // Validate message length (2000 character limit)
   if (msg && msg.length > 2000) {
     return NextResponse.json(
-      { message: "error", error: "Message too long" },
+      { message: "Error: Message too long", data: [] },
       { status: 400 }
     );
   }
@@ -24,7 +32,7 @@ export async function POST(req: NextRequest) {
   
   if (!chatSession) {
     return NextResponse.json(
-      { message: "Invalid Session. Start a new session." },
+      { message: "Invalid Session. Start a new session.", data: [] },
       { status: 400 }
     );
   }
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.log(error);
     return NextResponse.json(
-      { message: "Invalid session data. Start a new session." },
+      { message: "Invalid session data. Start a new session.", data: [] },
       { status: 400 }
     );
   }
@@ -44,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (!conversationId) {
     return NextResponse.json(
-      { message: "Invalid session data. Start a new session." },
+      { message: "Invalid session data. Start a new session.", data: [] },
       { status: 400 }
     );
   }
@@ -60,7 +68,6 @@ export async function POST(req: NextRequest) {
 
     // Send the actual message
     if (msg) {
-      const messageId = randomUUID();
       const messageContent = {
         staticContent: {
           formatType: "Text",
@@ -98,7 +105,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error in MIAW message API:", error);
     return NextResponse.json(
-      { message: "Failed to send message", error: error instanceof Error ? error.message : "Unknown error" },
+      { message: "Failed to send message", data: [] },
       { status: 500 }
     );
   }
