@@ -418,6 +418,25 @@ export class MiawApiClient {
     }
   }
 
+  // Send typing indicator
+  public async sendTypingIndicator(conversationId: string, entryType:string, typingId: string): Promise<void> {
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entry`;
+    
+    const payload = {
+      entryType: entryType,
+      id: typingId
+    };
+
+    try {
+      // Use continuation token if available, otherwise use access token
+      const headers = await this.getAuthHeadersWithContinuation();
+      await axios.post(endpoint, payload, { httpsAgent, headers });
+    } catch (error) {
+      console.error('Error sending typing indicator:', error);
+      throw new Error('Failed to send typing indicator');
+    }
+  }
+
   // Send message
   public async sendMessage(
     conversationId: string, 
@@ -453,14 +472,14 @@ export class MiawApiClient {
   }
 
   // Send acknowledgment (delivery or read receipt)
-  public async sendAcknowledgment(conversationId: string, acknowledgmentId: string, acknowledgmentType: 'Delivery' | 'Read'): Promise<void> {
+  public async sendAcknowledgment(conversationId: string, acknowledgmentType: 'Delivery' | 'Read', conversationEntryId: string): Promise<void> {
     const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/acknowledge-entries`;
     
     const payload = {
       acks: [{
-        messageId: acknowledgmentId,
+        id: randomUUID(),
         entryType: acknowledgmentType,
-        conversationEntryId: conversationId
+        conversationEntryId: conversationEntryId
       }]
     };
 
@@ -560,16 +579,6 @@ export class MiawApiClient {
           console.error('SSE stream error:', error);
           controller.error(error);
         });
-      }
-    });
-
-    return new Response(response.data, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control'
       }
     });
   }
