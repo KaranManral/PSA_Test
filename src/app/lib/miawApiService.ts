@@ -473,49 +473,56 @@ export class MiawApiClient {
   }
 
   // Get SSE events stream URL with authentication token
-  public async getEventsStreamUrl(conversationId: string): Promise<string> {
+  public async subscribeEvents(conversationId: string): Promise<any> {
     await this.ensureContinuationToken();
-    const token = this.continuationToken as string;
-    return `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/events?access_token=${token}`;
-  }
-
-  // List all conversations
-  public async listConversations(): Promise<ConversationList> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/list`;
-
-    try {
-      await this.ensureContinuationToken();
-      const headers = await this.getAuthHeadersWithContinuation();
-      const response: AxiosResponse<ConversationList> = await axios.get(endpoint, { httpsAgent, headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error listing conversations:', error);
-      throw new Error('Failed to list conversations');
+    const headers = {
+      'Accept': 'text/event-stream',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.continuationToken}`,
+      'X-Org-Id': this.organizationId,
     }
-  }
-
-  // List conversation entries
-  public async listConversationEntries(conversationId: string): Promise<ConversationEntryList> {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/entries`;
-
+    const body = {
+      conversationId: randomUUID(),
+      esDeveloperName: this.developerName,
+    }
+    const sseEndpoint = `${this.baseUrl}/eventrouter/v1/sse`;
     try {
-      await this.ensureContinuationToken();
-      const headers = await this.getAuthHeadersWithContinuation();
-      const response: AxiosResponse<ConversationEntryList> = await axios.get(endpoint, { httpsAgent, headers });
-      return response.data;
+      const response: AxiosResponse<any> = await axios.get(sseEndpoint, {
+        data: JSON.stringify(body),
+        headers,
+        httpsAgent,
+        responseType: 'stream',
+        timeout: 90000
+      });
+      const stream = response.data;
+      stream.on('data', (chunk) => {
+      // chunk is a Buffer
+      const text = chunk.toString('utf8');
+      console.log('chunk:', text);
+      // handle chunk (accumulate, parse NDJSON, etc.)
+    });
+
+    stream.on('end', () => {
+      console.log('stream ended');
+    });
+
+    stream.on('error', (err) => {
+      console.error('stream error', err);
+    });
+      return stream; // This will be a stream of events
     } catch (error) {
-      console.error('Error listing conversation entries:', error);
-      throw new Error('Failed to list conversation entries');
+      console.error('Error subscribing to MIAW events:', error);
+      throw new Error('Failed to subscribe to events');
     }
   }
 
   // Retrieve conversation transcript
   public async getConversationTranscript(conversationId: string) {
-    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/transcript`;
+    const endpoint = `${this.baseUrl}/iamessage/api/v2/conversation/${conversationId}/transcript?esDeveloperName=${this.developerName}`;
 
     try {
       await this.ensureContinuationToken();
-      const headers = await this.getAuthHeadersWithContinuation();
+      const headers = await this.getAuthOnlyHeaderWithContinuation();
       const response: AxiosResponse<any> = await axios.get(endpoint, { httpsAgent, headers });
       return response.data;
     } catch (error) {

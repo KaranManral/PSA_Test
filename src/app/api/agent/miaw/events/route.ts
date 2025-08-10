@@ -1,16 +1,16 @@
 /*
-  This API route handles Server-Sent Events (SSE) for real-time messaging with MIAW API.
-  It streams events like new messages, typing indicators, read receipts, etc.
-  Uses centralized authentication from MiawApiClient.
+  This API route handles fetching events for real-time messaging with MIAW API.
+  It returns events like new messages, typing indicators, read receipts, etc.
 */
 
 import { NextRequest, NextResponse } from "next/server";
 import { MiawApiClient } from "@/app/lib/miawApiService";
+import { Transform, TransformCallback } from 'stream';
 
 export async function GET(req: NextRequest) {
   // Retrieve the MIAW chat session from cookies
   const chatSession = req.cookies.get("miawChatSession")?.value;
-  
+
   if (!chatSession) {
     return NextResponse.json(
       { message: "No active session found" },
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { conversationId, continuationToken } = sessionData;
+  const { conversationId } = sessionData;
 
   if (!conversationId) {
     return NextResponse.json(
@@ -37,132 +37,102 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Set up SSE response headers
-  const headers = new Headers({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Cache-Control',
-  });
-
-  // Create a TransformStream to handle the SSE connection
-  const stream = new TransformStream();
-  const writer = stream.writable.getWriter();
-
-  let eventSource: EventSource | null = null;
-  let heartbeatInterval: NodeJS.Timeout | null = null;
-
   try {
-    // Initialize MIAW API client (handles token management internally)
-    const miawClient = MiawApiClient.getInstance();
+    // Initialize MIAW API client
+    const miawClient = new MiawApiClient();
 
-    // Set continuation token if available for session-based operations
-    if (continuationToken) {
-      miawClient.setContinuationToken(continuationToken);
-    }
-    
-    // Get SSE endpoint URL with appropriate token
-    const sseEndpoint = await miawClient.getEventsStreamUrl(conversationId);
+    // Subscribe to events
+    const eventStream = await miawClient.subscribeEvents(conversationId);
 
-    // Import EventSource for server-side use
-    const { EventSource } = await import('eventsource');
-    
-    eventSource = new EventSource(sseEndpoint);
+    return new NextResponse(eventStream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive"
+    }});
 
-    if (eventSource) {
-      // Handle incoming SSE events from MIAW
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Forward the event to the client
-          const sseMessage = `data: ${JSON.stringify({
-            type: 'MIAW_EVENT',
-            eventType: data.type || 'UNKNOWN',
-            data: data,
-            timestamp: new Date().toISOString()
-          })}\n\n`;
+    // // Create a transform stream to handle SSE data
+    // const parser = new Transform({
+    //   transform(chunk: Buffer, encoding: string, callback: TransformCallback) {
+    //     const data = chunk.toString();
+    //     if (data.startsWith('event: CONVERSATION_MESSAGE')) {
+    //       const eventData = data.split('\ndata: ')[1];
+    //       try {
+    //         const parsedData = JSON.parse(eventData);
+    //         const sender = parsedData.conversationEntry.sender.role.toLowerCase();
+    //         if (sender === 'chatbot') {
+    //           const payload = JSON.parse(parsedData.conversationEntry.entryPayload);
+    //           const message = JSON.stringify({
+    //             type: 'CONVERSATION_MESSAGE',
+    //             data: {
+    //               messageId: parsedData.conversationEntry.id,
+    //               conversationId: parsedData.conversationEntry.conversationId,
+    //               messageContent: payload.abstractMessage.staticContent.text,
+    //               sender: parsedData.conversationEntry.sender,
+    //               timestamp: parsedData.conversationEntry.timestamp
+    //             }
+    //           });
+    //           this.push(message + '\n\n');
+    //         }
+    //       } catch (err: unknown) {
+    //         console.error('Message parse error:', err instanceof Error ? err.message : 'Unknown error');
+    //       }
+    //     }
+    //     callback();
+    //   }
+    // });
 
-          writer.write(new TextEncoder().encode(sseMessage));
-        } catch (error) {
-          console.error('Error processing SSE message:', error);
-        }
-      };
+    // // Create readable web stream from node stream
+    // const readableStream = new ReadableStream({
+    //   start(controller) {
+    //     // Pipe event stream through parser
+    //     eventStream.pipe(parser);
 
-      eventSource.onerror = (error) => {
-        console.error('MIAW SSE connection error:', error);
-        
-        const errorMessage = `data: ${JSON.stringify({
-          type: 'ERROR',
-          message: 'Connection error',
-          timestamp: new Date().toISOString()
-        })}\n\n`;
+    //     // Handle the parsed data
+    //     parser.on('data', (chunk: Buffer) => {
+    //       controller.enqueue(chunk);
+    //     });
 
-        writer.write(new TextEncoder().encode(errorMessage));
-      };
-    }
+    //     // Handle errors
+    //     eventStream.on('error', (error: Error) => {
+    //       console.error('Event stream error:', error);
+    //       controller.error(error);
+    //       parser.end();
+    //     });
 
-    // Send initial connection message
-    const initialMessage = `data: ${JSON.stringify({
-      type: 'CONNECTION_ESTABLISHED',
-      message: 'Connected to MIAW real-time events',
-      timestamp: new Date().toISOString()
-    })}\n\n`;
+    //     parser.on('error', (error: Error) => {
+    //       console.error('Parser error:', error);
+    //       controller.error(error);
+    //     });
 
-    writer.write(new TextEncoder().encode(initialMessage));
+    //     // Handle end of stream
+    //     parser.on('end', () => {
+    //       controller.close();
+    //     });
+    //   },
+    //   cancel() {
+    //     // Clean up
+    //     if (eventStream.destroy) eventStream.destroy();
+    //     parser.end();
+    //   }
+    // });
 
-    // Set up heartbeat to keep connection alive
-    heartbeatInterval = setInterval(() => {
-      const heartbeat = `data: ${JSON.stringify({
-        type: 'HEARTBEAT',
-        timestamp: new Date().toISOString()
-      })}\n\n`;
-
-      try {
-        writer.write(new TextEncoder().encode(heartbeat));
-      } catch (error) {
-        console.error('Error sending heartbeat:', error);
-        // Connection likely closed, clean up
-        if (eventSource) {
-          eventSource.close();
-        }
-        if (heartbeatInterval) {
-          clearInterval(heartbeatInterval);
-        }
-      }
-    }, 30000); // Send heartbeat every 30 seconds
-
+    // // Return the readable stream as the response
+    // return new NextResponse(readableStream, {
+    //   headers: {
+    //     'Content-Type': 'text/event-stream',
+    //     'Cache-Control': 'no-cache',
+    //     'Connection': 'keep-alive'
+    //   }
+    // });
   } catch (error) {
-    console.error('Error setting up MIAW SSE connection:', error);
-    
-    const errorMessage = `data: ${JSON.stringify({
-      type: 'SETUP_ERROR',
-      message: 'Failed to establish connection',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    })}\n\n`;
-
-    writer.write(new TextEncoder().encode(errorMessage));
-    writer.close();
+    console.error("Error subscribing to MIAW events:", error);
+    return NextResponse.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to subscribe to events"
+      },
+      { status: 500 }
+    );
   }
-
-  // Handle client disconnect
-  req.signal.addEventListener('abort', () => {
-    console.log('Client disconnected from SSE');
-    
-    if (eventSource) {
-      eventSource.close();
-    }
-    
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-    }
-    
-    writer.close();
-  });
-
-  return new NextResponse(stream.readable, {
-    headers
-  });
 }
