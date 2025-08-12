@@ -11,6 +11,7 @@ import { MiawApiClient } from "@/app/lib/miawApiService";
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const jobApplicationNumber: string = body.jobApplicationNumber ?? "";
+  const agentName: string = body.Agent_Name ?? "";
   const termsAndConditionAgreed: boolean = body.termsAndConditionAgreed === true;
 
   // Validate required parameters
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
     // Create conversation with pre-chat data
     const preChatData = {
       JobApplicationNumber: jobApplicationNumber,
-      SessionId: randomUUID()
+      SessionId: randomUUID(),
+      Agent_Name: agentName
     };
 
     // Create conversation (this will auto-generate continuation token)

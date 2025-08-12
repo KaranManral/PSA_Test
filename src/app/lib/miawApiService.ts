@@ -213,6 +213,7 @@ export interface MiawServerSentEvent {
 export interface MiawPreChatData {
   JobApplicationNumber?: string;
   SessionId?: string;
+  Agent_Name?: string;
   [key: string]: string | undefined;
 }
 
@@ -395,6 +396,7 @@ export class MiawApiClient {
       routingAttributes: {
         X_Conversation_ID: conversationId,
         jobApplicationNumber: preChatData?.JobApplicationNumber,
+        Agent_Name: preChatData?.Agent_Name,
       }
     };
 

@@ -45,7 +45,7 @@ export default function ChatBot({
   jobApplicationNumber: string;
 }) {
   //Details about agent
-  const [agentName, setAgentName] = useState<string>("Adecco Agent");
+  const [agentName, setAgentName] = useState<string>("");
 
   // State for chat messages, input, and UI flags
   const [messages, setMessages] = useState<Message[]>([]);
@@ -90,14 +90,10 @@ export default function ChatBot({
     setTimeout(() => setToast(null), 5000); // Hide after 5 seconds
   };
 
-  useEffect(() => {
-    setAgentName("Adecco Agent");
-  }, []);
-
   // Scrolls to the bottom of the chat when messages update
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isTyping]);
 
   // Setup real-time event listening when session is active
   useEffect(() => {
@@ -522,6 +518,7 @@ export default function ChatBot({
       };
 
       console.log("Adding bot message to chat:", botMessage);
+      setTimeout(() => inputRef.current?.focus(), 0);
       setMessages((prev: any[]) => [...prev, botMessage]);
 
       // optional: sendDeliveryAcknowledgement(messageId);
@@ -680,6 +677,7 @@ export default function ChatBot({
         body: JSON.stringify({
           jobApplicationNumber: jobApplicationNumber,
           termsAndConditionAgreed: termsAccepted,
+          Agent_Name: agentName,
         }),
         headers: {
           "Content-Type": "application/json",
@@ -1289,9 +1287,26 @@ export default function ChatBot({
                   </label>
                 </div>
 
+                {/* Agent Name Selection */}
+                <div className="mb-4">
+                  <label htmlFor="agentName" className="block text-gray-700 mb-1">Select Agent Name</label>
+                  <select
+                    id="agentName"
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    required
+                    className="w-full border border-gray-300 rounded-md p-2"
+                  >
+                    <option value="" disabled>Select an agent</option>
+                    <option value="Karan">Karan</option>
+                    <option value="Om">Om</option>
+                    <option value="Himanshu">Himanshu</option>
+                  </select>
+                </div>
+
                 <button
                   onClick={handleStartSession}
-                  disabled={isCreatingSession || !termsAccepted}
+                  disabled={isCreatingSession || !termsAccepted || !agentName}
                   className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isCreatingSession ? (
